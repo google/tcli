@@ -1,0 +1,6 @@
+Value Vlan (\d+)
+Value VlanName (\S+)
+
+Start
+  ^${Vlan}\s+${VlanName} -> Record
+  ^VLAN Type -> End

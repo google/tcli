@@ -1,0 +1,8 @@
+Value Filldown Vlan (\S+)
+Value Filldown VlanName (\S+)
+Value Verbose,List,Required Interface ([\w\d\.\/\-]+)
+
+Start
+  ^\S+\s+\S+\s+\S+\s+$$ -> Continue.Record
+  ^\S+\s+${VlanName}\s+${Vlan}\s+$$ -> Clear
+  ^\s+${Interface}

@@ -1,0 +1,5 @@
+Routing instance        VLAN name             Tag          Interfaces
+default-switch          DEVICE_MGMT           20       
+                                                           ae13.20*
+                                                           et-0/0/96.61*
+                                                           ge-0/0/45.0*

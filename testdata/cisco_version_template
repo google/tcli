@@ -1,0 +1,30 @@
+Value Model (\S+)
+Value Chassis (\S+[ -]\d+)
+Value RoutingEngine ()
+Value Required Version ([^ \[]+)
+Value Verbose Memory (\S+)
+Value Verbose ConfigRegister (0x\S+)
+Value Verbose Uptime (.*)
+Value Verbose ReloadReason (.*)
+Value Verbose ImageFile ([^"]+)
+Value Verbose ROM (\S+)
+Value Verbose ReloadTime (.*)
+
+Start
+  ^Cisco IOS Software.*Version ${Version},
+  ^Cisco IOS Software, IOS-XE Software.*Version ${Version} REL.*
+  ^Cisco IOS XR Software, Version ${Version}
+  ^.*uptime is ${Uptime}
+  ^System returned to ROM by ${ReloadReason}
+  ^System restarted at ${ReloadTime}
+  ^System image file is "${ImageFile}"
+  ^\s+Workspace\s+: ${ImageFile}
+  ^[cC]isco ${Model} .* with ${Memory} bytes of memory
+  ^Model number\s+:\s+${Model}
+  ^cisco ${Model} \S+ processor (.+) with ${Memory} bytes
+  ^cisco ${Model} \S+ processor -> Continue
+  ^cisco ${Chassis} \S+ processor
+  ^${Chassis} .*Chassis
+  ^Configuration register .*is ${ConfigRegister}
+  ^ROM: System Bootstrap, Version ${ROM}
+  ^ROM: ${ROM}
