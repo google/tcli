@@ -20,9 +20,8 @@
 from codecs import open  # pylint: disable=redefined-builtin,g-importing-member
 from os import path
 from setuptools import setup
-import tcli
 
-
+__version__ = '0.0.0'
 here = path.abspath(path.dirname(__file__))
 
 # Get the long description from the README file
@@ -33,7 +32,7 @@ setup(
     name='tcli',
     maintainer='Google',
     maintainer_email='tcli-dev@googlegroups.com',
-    version=tcli.__version__,
+    version=__version__,
     description=(
         'CLI for interacting with multiple devices and structuring the output.'
         ),
