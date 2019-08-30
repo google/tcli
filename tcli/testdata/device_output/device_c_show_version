@@ -1,0 +1,51 @@
+re0:
+--------------------------------------------------------------------------
+Hostname: re0-device_c
+Model: t640
+JUNOS Base OS boot [10.4X23]
+JUNOS Base OS Software Suite [10.4X23]
+JUNOS Kernel Software Suite [10.4X23]
+JUNOS Crypto Software Suite [10.4X23]
+JUNOS Packet Forwarding Engine Support (M/T Common) [10.4X23]
+JUNOS Packet Forwarding Engine Support (T-Series) [10.4X23]
+JUNOS Online Documentation [10.4X23]
+JUNOS Voice Services Container package [10.4X23]
+JUNOS Border Gateway Function package [10.4X23]
+JUNOS Services AACL Container package [10.4X23]
+JUNOS Services LL-PDF Container package [10.4X23]
+JUNOS Services PTSP Container package [10.4X23]
+JUNOS Services Stateful Firewall [10.4X23]
+JUNOS Services NAT [10.4X23]
+JUNOS Services Application Level Gateways [10.4X23]
+JUNOS Services Captive Portal and Content Delivery Container package [10.4X23]
+JUNOS Services RPM [10.4X23]
+JUNOS AppId Services [10.4X23]
+JUNOS IDP Services [10.4X23]
+JUNOS Runtime Software Suite [10.4X23]
+JUNOS Routing Software Suite [10.4X23]
+
+re1:
+--------------------------------------------------------------------------
+Hostname: re1-device_c
+Model: t640
+JUNOS Base OS boot [10.4X23]
+JUNOS Base OS Software Suite [10.4X23]
+JUNOS Kernel Software Suite [10.4X23]
+JUNOS Crypto Software Suite [10.4X23]
+JUNOS Packet Forwarding Engine Support (M/T Common) [10.4X23]
+JUNOS Packet Forwarding Engine Support (T-Series) [10.4X23]
+JUNOS Online Documentation [10.4X23]
+JUNOS Voice Services Container package [10.4X23]
+JUNOS Border Gateway Function package [10.4X23]
+JUNOS Services AACL Container package [10.4X23]
+JUNOS Services LL-PDF Container package [10.4X23]
+JUNOS Services PTSP Container package [10.4X23]
+JUNOS Services Stateful Firewall [10.4X23]
+JUNOS Services NAT [10.4X23]
+JUNOS Services Application Level Gateways [10.4X23]
+JUNOS Services Captive Portal and Content Delivery Container package [10.4X23]
+JUNOS Services RPM [10.4X23]
+JUNOS AppId Services [10.4X23]
+JUNOS IDP Services [10.4X23]
+JUNOS Runtime Software Suite [10.4X23]
+JUNOS Routing Software Suite [10.4X23]

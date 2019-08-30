@@ -1,0 +1,33 @@
+Value Model (.*)
+Value Chassis (.cc[0-9]?-re[0-9])
+Value RoutingEngine (re\d)
+Value Required Version (.*)
+Value Verbose Junos_Base_boot (\S+)
+Value Verbose Kernel_Type (\S+)
+Value Verbose Junos_Kernel (.*)
+Value Verbose Junos_Crypto (.*)
+Value Verbose Junos_PFE_Common (.*)
+Value Verbose Junos_PFE_T (.*)
+Value Verbose Junos_Documentation (.*)
+Value Verbose Junos_Routing (.*)
+
+Start
+  ^.cc[0-9]?-re[0-9] -> Continue.Record
+  ^${Chassis}:
+  ^${RoutingEngine}:
+  ^Model: ${Model}
+  ^JUNOS Base OS boot \[${Junos_Base_boot}\]
+  ^Junos: ${Junos_Base_boot}
+  ^JUNOS OS Kernel ${Kernel_Type}
+  ^JUNOS Software Release \[${Junos_Base_boot}\]
+  ^JUNOS EX  Software Suite \[${Junos_Base_boot}\]
+  ^JUNOS Base OS Software Suite \[${Version}\]
+  ^JUNOS ${Kernel_Type} Kernel Software Suite \[${Junos_Kernel}\]
+  ^JUNOS Kernel Software Suite \[${Junos_Kernel}\]
+  ^JUNOS Crypto Software Suite \[${Junos_Crypto}\]
+  ^JUNOS Packet Forwarding Engine Support .M/T Common. \[${Junos_PFE_Common}\]
+  ^JUNOS Packet Forwarding Engine Support .T-Series. \[${Junos_PFE_T}\]
+  ^JUNOS Online Documentation \[${Junos_Documentation}\]
+  ^JUNOS Routing Software Suite \[${Junos_Routing}\]
+  ^$$ -> Record
+ 

@@ -1,0 +1,9 @@
+VLAN Name                                     Status    Ports
+---- ---------------------------------------- --------- -------------------------------
+1    default                                  active    Gi2/5, Gi2/35, Gi2/39, Gi2/40, Gi2/41, Gi2/42, Gi3/48
+2    A-NAME-1                                 active    Gi2/7, Gi2/8, Gi2/9, Gi2/10, Gi2/11, Gi2/13, Gi2/14, Gi2/16, Gi2/30, Gi2/31
+102  A-NAME-1                                 active    Gi2/19
+103  A-NAME-1                                 active    
+104  A-NAME-1                                 active
+105  A-NAME-1                                 active
+106  A-NAME-1                                 active

@@ -1,0 +1,29 @@
+# Example device inventory. Likely this will be replaced by calls to a
+# database system or other datastore where device data is kept.
+# This file serves as a simple example to get users started with TCLI.
+#
+# Lines starting with '#' are ignored. The first line is the header line and
+# each subsequent line is a device and its attributes.
+# The first column must be 'device' and if the last column is called 'flags'
+# then it and any following entries are added together as a list.
+
+
+# Header row
+device,realm,pop,vendor,flags
+# Devices
+device_a,lab,abc,cisco,active,alertable
+device_b,lab,xyz,cisco,active,alertable
+device_c,lab,xyz,juniper,inactive,nonalertable
+
+# Inventory library will parse and convert these contents into the following
+# representation:
+# {'device_a:
+#  Device(realm='lab', pop='abc',vendor='cisco',
+#         flags=[active,alertable]),
+# 'device_b:
+#  Device(realm='lab', pop='xyz',vendor='cisco',
+#         flags=[active,alertable]),
+# 'device_c:
+#  Device(realm='lab', pop='xyz',vendor='juniper',
+#         flags=[inactive,nonalertable])
+# }

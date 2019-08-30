@@ -1,0 +1,15 @@
+# First line is header fields for columns
+# Regular expressions are supported in all fields except the first.
+# Last field supports variable length command completion.
+# abc[[xyz]] is expended to abc(x(y(z)?)?)?, regexp inside [[]] is not supported
+#
+Template, Hostname, Vendor, Command
+#
+cisco_version_template, .*, Cisco$, sh[[ow]] ve[[rsion]]
+cisco_vlan_template, .*, Cisco$, sh[[ow]] vl[[an]]
+juniper_version_template, .*, Juniper, sh[[ow]] ve[[rsion]]
+juniper_vlan_template, .*, Juniper, sh[[ow]] vl[[ans]]
+a_template, .*, .*, c[[at]] a[[lpha]]
+b_template, .*, .*, c[[at]] b[[eta]]
+c_template, .*, Asterix, c[[at]] e[[psilon]]
+d_template, .*, Obelix, c[[at]] e[[psilon]]
