@@ -18,17 +18,12 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import logging
 import readline
 import sys
 from absl import app
 from absl import flags
-from absl import logging
-# pylint: disable=g-bad-import-order,g-import-not-at-top
-# Place current directory at end of import path, so local files are loaded last.
-# Relative local imports are used to load local imports as needed.
-sys.path = sys.path[1:] + [sys.path[0]]
-from tcli import tcli
-# pylint: enable=g-bad-import-order, g-import-not-at-top
+import tcli.tcli_lib as tcli
 
 FLAGS = flags.FLAGS
 

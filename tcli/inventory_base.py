@@ -87,7 +87,7 @@ flags.DEFINE_integer(
     TILDE_COMMAND_HELP['maxtargets'])
 
 flags.DEFINE_string(
-    'xtargets', '',
+    'xtargets', DEFAULT_XTARGETS,
     TILDE_COMMAND_HELP['xtargets'],
     short_name='X')
 
@@ -178,14 +178,11 @@ class Inventory(object):
     # Store literal strings and compiled regexps in dedicated dictionary
     # Use to accelerate matching against devices when buidling device_list
     self._literals_filter = {}
-    self._maxtargets = FLAGS.maxtargets
     self._compiled_filter = {}
     self._lock = threading.Lock()
     self._devices_loaded = threading.Event()
     self._devices_loaded.set()
-    # Set xtargets default, if not set already.
-    if not FLAGS.xtargets:
-      FLAGS.xtargets = DEFAULT_XTARGETS
+    self._maxtargets = FLAGS.maxtargets
 
     # Filters and exclusions added by this library.
     logging.debug('Device attributes statically defined: "%s".',

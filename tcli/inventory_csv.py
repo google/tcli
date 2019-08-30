@@ -88,13 +88,9 @@ flags.DEFINE_string(
     'inventory', DEFAULT_CSV_FILE,
     'Location of file containing the CSV list of devices.')
 
+# TODO(harro): Support using a different string for separating flags.
 flags.DEFINE_string('separator', ', ',
                     'String sequence that separates entries in the CSV file.')
-# TODO(harro): Support using a different string for separating flags.
-
-
-AuthError = inventory_base.AuthError
-InventoryError = inventory_base.InventoryError
 
 
 class Inventory(inventory_base.Inventory):

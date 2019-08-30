@@ -1,4 +1,3 @@
-# Copyright 2019 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,18 +15,17 @@
 
 import collections
 import re
-import sys
-from absl import flags
 from absl.testing import absltest as unittest
 import mock
 from tcli import inventory_base
 
-FLAGS = flags.FLAGS
-FLAGS(sys.argv)
-
 
 class InventoryBaseTest(unittest.TestCase):
 
+  # Tests facilities such as 'pytest' do not call unittest.main
+  # under some circumstances (i.e. discovery mode) it is necessary
+  # explicitly parse the flags..
+  inventory_base.FLAGS([__file__])
   # pylint: disable=invalid-name
   Device = collections.namedtuple('Device', (), verbose=False)
 
@@ -144,6 +142,8 @@ class InventoryBaseTest(unittest.TestCase):
   def testShowEnv(self):
     """Tests basic display of running environment."""
 
+    self.inv._filters = {'targets': ''}
+    self.inv._exclusions = {'xtargets': ''}
     self.assertEqual(
         'Inventory:\n'
         '  Max Targets: 50\n'

@@ -21,7 +21,6 @@ from __future__ import print_function
 from io import StringIO    # pylint: disable=g-importing-member
 from absl import flags
 from absl.testing import absltest as unittest
-
 from tcli.tcli_textfsm import textfsm
 
 

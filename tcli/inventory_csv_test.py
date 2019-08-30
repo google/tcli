@@ -19,6 +19,7 @@ from __future__ import division
 from __future__ import print_function
 
 import collections
+import copy
 from io import StringIO    # pylint: disable=g-importing-member
 from absl.testing import absltest as unittest
 import mock
@@ -28,13 +29,23 @@ from tcli import inventory_csv as inventory
 class UnitTestCSVInventory(unittest.TestCase):
   """Test the CSV inventory class."""
 
-  def setUp(self):
-    super(UnitTestCSVInventory, self).setUp()
-    inventory.FLAGS.realm = 'lab'
+  @classmethod
+  def setUpClass(cls):
+    super(UnitTestCSVInventory, cls).setUpClass()
+    cls.flags_orig = copy.deepcopy(inventory.FLAGS)
     # Stub out thread related byproduct of base class.
     inventory.inventory_base.threading.Thread = mock.MagicMock()
     inventory.inventory_base.threading.Event = mock.MagicMock()
     inventory.inventory_base.threading.Lock = mock.MagicMock()
+
+  @classmethod
+  def tearDownClass(cls):
+    super(UnitTestCSVInventory, cls).tearDownClass()
+    inventory.FLAGS = cls.flags_orig
+
+  def setUp(self):
+    super(UnitTestCSVInventory, self).setUp()
+    inventory.FLAGS.realm = 'lab'
     with mock.patch.object(inventory.Inventory, 'LoadDevices'):
       self.inv = inventory.Inventory()
     self.inv._filters['targets'] = ''
@@ -97,7 +108,7 @@ class UnitTestCSVInventory(unittest.TestCase):
     csv_text = ('device,bb,ccc,flags\n')
     # Empty table
     result = self.inv._ParseDevicesFromCsv(StringIO(csv_text))
-    self.assertEmpty(result)
+    self.assertEqual({}, result)
 
   def testParseDevicesFromCsv6(self):
     """Tests parsing CSV data from empty buffer."""
@@ -167,7 +178,7 @@ class UnitTestCSVInventory(unittest.TestCase):
   def testCreateCmdRequest(self):
     """Test building commands requests to send to device connection service."""
 
-    inventory.UID = 0
+    inventory.inventory_base.Request.UID = 0
     request = self.inv._CreateCmdRequest('abc', 'show vers', 'cli')
     self.assertEqual('abc', request.target)
     self.assertEqual('show vers', request.command)

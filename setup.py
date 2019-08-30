@@ -21,7 +21,7 @@ from codecs import open  # pylint: disable=redefined-builtin,g-importing-member
 from os import path
 from setuptools import setup
 
-__version__ = '0.0.0'
+__version__ = '0.1.0'
 here = path.abspath(path.dirname(__file__))
 
 # Get the long description from the README file
@@ -41,7 +41,7 @@ setup(
     url='https://github.com/google/tcli',
     license='Apache License, Version 2.0',
     classifiers=[
-        'Development Status :: 5 - Production/Stable',
+        'Development Status :: 3 - Alpha',
         'Intended Audience :: Operations',
         'License :: OSI Approved :: Apache Software License',
         'Operating System :: OS Independent',
@@ -49,5 +49,6 @@ setup(
     requires=['absl', 'mock', 'textfsm', 'tqdm'],
     packages=['tcli'],
     include_package_data=True,
-    package_data={'tcli': ['testdata/*']},
+    setup_requires=['pytest-runner'],
+    tests_require=['pytest'],
     )

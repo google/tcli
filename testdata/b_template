@@ -1,5 +1,0 @@
-Value ColBa (\S+)
-Value ColBb (\S+)
-
-Start
-  ^${ColBa} ${ColBb}

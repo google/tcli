@@ -25,14 +25,12 @@ import copy
 from absl import flags
 from absl.testing import absltest as unittest
 import mock
-import sys
-from tcli import tclilib as tcli
+from tcli import tcli_lib as tcli
 from tcli.tcli_textfsm import clitable
 
 
 APPEND = tcli.command_parser.APPEND
 FLAGS = flags.FLAGS
-FLAGS(sys.argv)
 
 
 class FakeDev(object):
@@ -119,9 +117,23 @@ class FakeActionRequest(object):
 class UnitTestTCLI(unittest.TestCase):
   """Tests the TCLI class."""
 
+  @classmethod
+  def setUpClass(cls):
+    super(UnitTestTCLI, cls).setUpClass()
+    cls.flags_orig = copy.deepcopy(tcli.FLAGS)
+    tcli.command_response.threading.Event = mock.MagicMock()
+    tcli.command_response.threading.Lock = mock.MagicMock()
+    # pylint: disable=line-too-long
+    tcli.command_response.tqdm = mock.MagicMock()
+    # pylint: enable=line-too-long
+
+  @classmethod
+  def tearDownClass(cls):
+    super(UnitTestTCLI, cls).tearDownClass()
+    tcli.FLAGS = cls.flags_orig
+
   def setUp(self):
     super(UnitTestTCLI, self).setUp()
-    self.terminal_size = tcli.terminal.TerminalSize
     # Turn off looking for .tclirc
     tcli.FLAGS.color = False
     tcli.FLAGS.config_file = 'none'
@@ -130,14 +142,12 @@ class UnitTestTCLI(unittest.TestCase):
     tcli.FLAGS.display = 'raw'
     tcli.FLAGS.filter = None
 
+    self.orig_terminal_size = tcli.terminal.TerminalSize
     tcli.terminal.TerminalSize = lambda: (10, 20)
-    tcli.command_response.threading.Event = mock.MagicMock()
-    tcli.command_response.threading.Lock = mock.MagicMock()
-    # pylint: disable=line-too-long
-    tcli.command_response.tqdm = mock.MagicMock()
-    # pylint: enable=line-too-long
 
+    self.orig_dev_attr = tcli.inventory.DEVICE_ATTRIBUTES
     tcli.inventory.DEVICE_ATTRIBUTES = {}
+
     self.tcli_obj = tcli.TCLI()
 
     self.tcli_obj.inventory = mock.MagicMock()
@@ -166,7 +176,8 @@ class UnitTestTCLI(unittest.TestCase):
 
   def tearDown(self):
     super(UnitTestTCLI, self).tearDown()
-    tcli.terminal.TerminalSize = self.terminal_size
+    tcli.terminal.TerminalSize = self.orig_terminal_size
+    tcli.inventory.DEVICE_ATTRIBUTES = self.orig_dev_attr
 
   def testCopy(self):
     # TODO(harro): Tests for extended commands?
