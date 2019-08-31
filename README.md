@@ -8,7 +8,7 @@ TCLI - client interface for issuing commands to any number of devices.
 
 Supports batch and interactive modes and multiple display formats.
 
-Handy for performing trouble shooting and geerating reports etc from
+Handy for performing troubleshooting and generating reports etc from
 arbitrarily large numbers of live devices.
 
 ## Cautions and Caveats
