@@ -27,8 +27,8 @@ import mock
 from tcli import tcli_lib as tcli
 
 
-FLAGS = flags.FLAGS
 tcli.inventory = importlib.import_module('tcli.inventory_csv')
+FLAGS = flags.FLAGS
 
 # Test outputs.
 HEADER = '#!# cat %s #!#'
@@ -46,7 +46,6 @@ class UnitTestTCLIEndToEnd(unittest.TestCase):
   def setUpClass(cls):
     super(UnitTestTCLIEndToEnd, cls).setUpClass()
     tcli.FLAGS([__file__,])
-    cls.flags_orig = copy.deepcopy(tcli.FLAGS)
     # Stub out as little as possible.
     tcli.command_response.tqdm = mock.MagicMock()
     tcli.TCLI._PrintWarning = mock.Mock()
@@ -55,7 +54,6 @@ class UnitTestTCLIEndToEnd(unittest.TestCase):
   @classmethod
   def tearDownClass(cls):
     super(UnitTestTCLIEndToEnd, cls).tearDownClass()
-    tcli.FLAGS = cls.flags_orig
 
   def setUp(self):
     super(UnitTestTCLIEndToEnd, self).setUp()

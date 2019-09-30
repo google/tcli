@@ -179,7 +179,8 @@ TILDE_COMMAND_HELP = {
 }
 
 # Prompt displays the target string, count of targets and if safe mode is on.
-PROMPT_STR = '#! <%s[%s]%s> !#\n#! '
+PROMPT_HDR = '#! <%s[%s]%s> !#'
+PROMPT_STR = '#! '
 
 # Colour values.
 COLOR_SCHEMES = ['light', 'dark', 'gross']
@@ -442,14 +443,14 @@ class TCLI(object):
 
     # Truncate prompt if too long to fit in terminal.
     (_, width) = terminal.TerminalSize()
-    if (len(PROMPT_STR % (
+    if (len(PROMPT_HDR % (
         self.inventory.targets,
         len(self.device_list), safe)) > width):
       target_str = '#####'
     else:
       target_str = self.inventory.targets
 
-    self.prompt = PROMPT_STR % (
+    self.prompt = PROMPT_HDR % (
         terminal.AnsiText(target_str, self.system_color),
         terminal.AnsiText(len(self.device_list), self.warning_color),
         terminal.AnsiText(safe, self.title_color))
@@ -1200,7 +1201,10 @@ class TCLI(object):
       self._SetPrompt()
     except ValueError as error_message:
       self._PrintWarning(str(error_message))
-    self.ParseCommands(input(self.prompt))
+    # Print the main prompt, so the ASCII escape sequences work.
+    print(self.prompt)
+    # Stripped ASCII escape from here, as they are not interpreted in PY3.
+    self.ParseCommands(input(PROMPT_STR))
 
   def _BufferInUse(self, buffername):
     """Check if buffer is already being written to."""

@@ -132,18 +132,6 @@ class DeviceAttribute(object):
   default_value = property(_GetDefault)
 
 
-class Request(object):
-  """Holds a request named dictionary and wrapped with a uid."""
-  UID = 0    # Each request has an identifier
-
-  def __init__(self):
-    Request.UID += 1
-    self.uid = Request.UID
-    self.target = None
-    self.command = None
-    self.mode = None
-
-
 class Inventory(object):
   """ADT Class for device inventory retrieval and command submission.
 
@@ -160,6 +148,17 @@ class Inventory(object):
     source: String identifier of source of device inventory.
   """
   SOURCE = 'unknown'
+
+  class Request(object):
+    """Holds a request named dictionary and wrapped with a uid."""
+    UID = 0    # Each request has an identifier
+
+    def __init__(self):
+      Inventory.Request.UID += 1
+      self.uid = Inventory.Request.UID
+      self.target = None
+      self.command = None
+      self.mode = None
 
   def __init__(self, batch=False):
     """Initialise thread safe access to data to support async calls."""
@@ -771,7 +770,7 @@ class Inventory(object):
   def _CreateCmdRequest(self, target, command, mode):
     """Creates command request for Device Accessor."""
 
-    request = Request()
+    request = self.Request()
     request.target = target
     request.command = bytes(command, 'utf-8').decode('unicode_escape')
     request.mode = mode
