@@ -19,7 +19,6 @@ from __future__ import division
 from __future__ import print_function
 
 import collections
-import copy
 from io import StringIO    # pylint: disable=g-importing-member
 from absl.testing import absltest as unittest
 import mock
