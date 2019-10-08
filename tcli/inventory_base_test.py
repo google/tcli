@@ -22,12 +22,13 @@ from tcli import inventory_base
 
 class InventoryBaseTest(unittest.TestCase):
 
-  # Tests facilities such as 'pytest' do not call unittest.main
-  # under some circumstances (i.e. discovery mode) it is necessary
-  # explicitly parse the flags..
-  inventory_base.FLAGS([__file__])
   # pylint: disable=invalid-name
   Device = collections.namedtuple('Device', (), verbose=False)
+
+  @classmethod
+  def setUpClass(cls):
+    super(InventoryBaseTest, cls).setUpClass()
+    inventory_base.FLAGS([__file__,])
 
   def setUp(self):
     super(InventoryBaseTest, self).setUp()

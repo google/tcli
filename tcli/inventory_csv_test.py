@@ -19,7 +19,6 @@ from __future__ import division
 from __future__ import print_function
 
 import collections
-import copy
 from io import StringIO    # pylint: disable=g-importing-member
 from absl.testing import absltest as unittest
 import mock
@@ -32,7 +31,7 @@ class UnitTestCSVInventory(unittest.TestCase):
   @classmethod
   def setUpClass(cls):
     super(UnitTestCSVInventory, cls).setUpClass()
-    cls.flags_orig = copy.deepcopy(inventory.FLAGS)
+    inventory.FLAGS([__file__,])
     # Stub out thread related byproduct of base class.
     inventory.inventory_base.threading.Thread = mock.MagicMock()
     inventory.inventory_base.threading.Event = mock.MagicMock()
@@ -41,7 +40,6 @@ class UnitTestCSVInventory(unittest.TestCase):
   @classmethod
   def tearDownClass(cls):
     super(UnitTestCSVInventory, cls).tearDownClass()
-    inventory.FLAGS = cls.flags_orig
 
   def setUp(self):
     super(UnitTestCSVInventory, self).setUp()
@@ -178,7 +176,7 @@ class UnitTestCSVInventory(unittest.TestCase):
   def testCreateCmdRequest(self):
     """Test building commands requests to send to device connection service."""
 
-    inventory.inventory_base.Request.UID = 0
+    self.inv.Request.UID = 0
     request = self.inv._CreateCmdRequest('abc', 'show vers', 'cli')
     self.assertEqual('abc', request.target)
     self.assertEqual('show vers', request.command)
