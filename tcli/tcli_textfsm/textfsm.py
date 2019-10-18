@@ -32,16 +32,11 @@ from __future__ import print_function
 import json
 from absl import flags
 import textfsm
+from textfsm import Usage
+from textfsm import TextFSMError
+from textfsm import TextFSMTemplateError
 
 FLAGS = flags.FLAGS
-
-# Ensure Exceptions are the same if using internal or external textfsm.
-# pylint: disable=g-bad-name
-Error = textfsm.Error
-Usage = textfsm.Usage
-TextFSMError = textfsm.TextFSMError
-TextFSMTemplateError = textfsm.TextFSMTemplateError
-# pylint: enable=g-bad-name
 
 
 class TextFSMOptions(textfsm.TextFSMOptions):

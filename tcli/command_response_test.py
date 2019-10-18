@@ -67,6 +67,7 @@ class FakeCmdResponse(command_response.CmdResponse):
   done = FakeEvent()
 
   def __init__(self, uid=''):
+    super(FakeCmdResponse, self).__init__()
     if uid:
       self.uid = uid
 

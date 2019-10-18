@@ -42,6 +42,8 @@ import os
 from absl import flags
 from absl import logging
 from tcli import inventory_base
+from tcli.inventory_base import AuthError       # pylint: disable=unused-import
+from tcli.inventory_base import InventoryError  # pylint: disable=unused-import
 
 ## CHANGEME
 ## The fields in the CSV that we want content to be filtered on.

@@ -101,6 +101,7 @@ class FakeCmdResponse(tcli.command_response.CmdResponse):
   done = FakeEvent()
 
   def __init__(self, uid='', device_name='', command='', data='', error=''):
+    super(FakeCmdResponse, self).__init__()
     if uid:
       self.uid = uid
 
