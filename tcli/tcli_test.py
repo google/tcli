@@ -22,6 +22,7 @@ from __future__ import print_function
 
 import collections
 import copy
+import os
 from absl import flags
 from absl.testing import absltest as unittest
 import mock
@@ -124,9 +125,9 @@ class UnitTestTCLI(unittest.TestCase):
     cls.flags_orig = copy.deepcopy(tcli.FLAGS)
     tcli.command_response.threading.Event = mock.MagicMock()
     tcli.command_response.threading.Lock = mock.MagicMock()
-    # pylint: disable=line-too-long
     tcli.command_response.tqdm = mock.MagicMock()
-    # pylint: enable=line-too-long
+    tcli.FLAGS.template_dir = os.path.join(os.path.dirname(__file__),
+                                           'testdata')
 
   @classmethod
   def tearDownClass(cls):

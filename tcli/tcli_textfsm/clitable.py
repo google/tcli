@@ -22,13 +22,12 @@ from absl import flags
 from tcli.tcli_textfsm import textfsm
 from textfsm import clitable
 from textfsm import texttable
+from textfsm.clitable import CliTableError
+from textfsm.clitable import Error
+from textfsm.clitable import IndexTableError  # pylint: disable=unused-import
+
 
 FLAGS = flags.FLAGS
-# pylint: disable=g-bad-name
-Error = clitable.Error
-IndexTableError = clitable.IndexTableError
-CliTableError = clitable.CliTableError
-# pylint: enable=g-bad-name
 
 
 class DeviceError(Error):

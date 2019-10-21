@@ -32,9 +32,9 @@ from __future__ import print_function
 import json
 from absl import flags
 import textfsm
-from textfsm import Usage
-from textfsm import TextFSMError
-from textfsm import TextFSMTemplateError
+from textfsm import TextFSMError          # pylint: disable=unused-import
+from textfsm import TextFSMTemplateError  # pylint: disable=unused-import
+from textfsm import Usage                 # pylint: disable=unused-import
 
 FLAGS = flags.FLAGS
 

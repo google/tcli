@@ -21,7 +21,7 @@ from codecs import open  # pylint: disable=redefined-builtin,g-importing-member
 from os import path
 from setuptools import setup
 
-__version__ = '0.1.2'
+__version__ = '0.1.3'
 here = path.abspath(path.dirname(__file__))
 
 # Get the long description from the README file
