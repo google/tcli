@@ -50,7 +50,6 @@ import copy
 import os
 import re
 import readline
-import shlex
 import subprocess
 import sys
 import tempfile
@@ -506,11 +505,12 @@ class TCLI(object):
         handler=self._CmdClear)
     cli_parser.RegisterCommand(
         'color', TILDE_COMMAND_HELP['color'], inline=True, toggle=True,
-        default_value=FLAGS.color, handler=self._CmdToggleValue)
+        default_value=FLAGS.color, handler=self._CmdToggleValue,
+        completer=lambda: ['on', 'off'])
     cli_parser.RegisterCommand(
         'color_scheme', TILDE_COMMAND_HELP['color_scheme'],
         inline=True, default_value=FLAGS.color_scheme,
-        handler=self._CmdColorScheme)
+        handler=self._CmdColorScheme, completer=lambda: COLOR_SCHEMES)
     cli_parser.RegisterCommand(
         'command', TILDE_COMMAND_HELP['command'], short_name='C', min_args=1,
         raw_arg=True, handler=self._CmdCommand)
@@ -518,7 +518,8 @@ class TCLI(object):
         'defaults', TILDE_COMMAND_HELP['defaults'], handler=self._CmdDefaults)
     cli_parser.RegisterCommand(
         'display', TILDE_COMMAND_HELP['display'], short_name='D', inline=True,
-        default_value=FLAGS.display, handler=self._CmdDisplay)
+        default_value=FLAGS.display, handler=self._CmdDisplay,
+        completer=lambda: DISPLAY_FORMATS)
     cli_parser.RegisterCommand(
         'env', TILDE_COMMAND_HELP['env'], max_args=0, handler=self._CmdEnv)
     cli_parser.RegisterCommand(
@@ -542,7 +543,7 @@ class TCLI(object):
     cli_parser.RegisterCommand(
         'linewrap', TILDE_COMMAND_HELP['linewrap'],
         inline=True, toggle=True, default_value=FLAGS.linewrap,
-        handler=self._CmdToggleValue)
+        handler=self._CmdToggleValue, completer=lambda: ['on', 'off'])
     cli_parser.RegisterCommand(
         'log', TILDE_COMMAND_HELP['log'], append=True, inline=True,
         handler=self._CmdLogging)
@@ -575,7 +576,8 @@ class TCLI(object):
         handler=self._CmdLogStop)
     cli_parser.RegisterCommand(
         'safemode', TILDE_COMMAND_HELP['safemode'], short_name='S', inline=True,
-        toggle=True, handler=self._CmdToggleValue)
+        toggle=True, handler=self._CmdToggleValue,
+        completer=lambda: ['on', 'off'])
     cli_parser.RegisterCommand(
         'timeout', TILDE_COMMAND_HELP['timeout'],
         default_value=FLAGS.timeout, handler=self._CmdTimeout)
@@ -584,7 +586,7 @@ class TCLI(object):
         max_args=2, handler=self._CmdWrite)
     cli_parser.RegisterCommand(
         'verbose', TILDE_COMMAND_HELP['verbose'], inline=True, toggle=True,
-        handler=self._CmdToggleValue)
+        handler=self._CmdToggleValue, completer=lambda: ['on', 'off'])
     cli_parser.RegisterCommand(
         'vi', TILDE_COMMAND_HELP['vi'], min_args=1, handler=self._CmdEditor)
 
@@ -645,51 +647,43 @@ class TCLI(object):
   def Completer(self, word, state):
     """Command line completion used by readline library."""
 
-    full_line = readline.get_line_buffer()
-    word_list = shlex.split(full_line)
-    if word_list and word_list[0].startswith(TILDE):
-      word_list[0] = word_list[0][len(TILDE):]
-      # Interword gap is indicated with a white space as the final token.
-      if full_line.endswith(' '):
-        word_list.append(' ')
-      return self._TildeCompleter(word_list, state)
-    else:
-      return self._CmdCompleter(full_line, state)
+    # Silently discard leading whitespace on cli.
+    full_line = readline.get_line_buffer().lstrip()
+    if full_line and full_line.startswith(TILDE):
+      return self._TildeCompleter(full_line, state)
+    return self._CmdCompleter(full_line, state)
 
-  def _TildeArgCompleter(self, word_list, state):
-    """Command line completion on command arguments."""
-
-    word = word_list[0]
-    if word.endswith(command_parser.APPEND):
-      # Strip any append suffix.
-      word = word[:-len(command_parser.APPEND)]
-    if word in self.cli_parser:
-      return self.cli_parser[word].completer(word_list[1:], state)
-    else:
-      return None
-
-  def _TildeCompleter(self, word_list, state):
+  def _TildeCompleter(self, full_line, state):
     """Command line completion for escape commands."""
 
-    if not word_list:
+    # Pass subsequent arguments of a command to its completer.
+    if ' ' in full_line:
+      cmd = full_line[1:full_line.index(' ')]
+      arg_string = full_line[full_line.index(' ') +1:]
+      completer_list = []
+      if self.cli_parser.GetCommand(cmd):
+        for arg_options in self.cli_parser.GetCommand(cmd).completer():
+          if arg_options.startswith(arg_string):
+            completer_list.append(arg_options)
+
+      if state < len(completer_list):
+        return completer_list[state]
       return None
 
-    if len(word_list) > 1:
-      return self._TildeArgCompleter(word_list, state)
-
-    word = word_list[0]
+    # First word, a TCLI command word.
     completer_list = []
     for cmd in self.cli_parser:
-      if cmd.startswith(word):
+      # Strip TILDE and compare.
+      if cmd.startswith(full_line[1:]):
         completer_list.append(cmd)
         if self.cli_parser.GetCommand(cmd).append:
           completer_list.append(cmd + command_parser.APPEND)
     completer_list.sort()
 
     if state < len(completer_list):
-      return completer_list[state]
-    else:
-      return None
+      # Re-apply TILDE to completion.
+      return TILDE + completer_list[state]
+    return None
 
   def _CmdCompleter(self, full_line, state):
     """Commandline completion used by readline library."""
@@ -1170,27 +1164,27 @@ class TCLI(object):
 
     if not pipe:
       return output
-    else:
-      pipe = pipe.lstrip('|')
-      try:
-        p = subprocess.Popen(
-            [pipe], shell=True, close_fds=True,
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-      except IOError as error_message:
-        logging.error('IOerror opening pipe.')
-        if str(error_message):
-          self._PrintWarning(str(error_message))
-        return
 
-      try:
-        result, _ = p.communicate(bytes(output, 'utf-8'))
-        logging.debug('Output written to pipe:\n%s', output)
-        logging.debug('Output read from pipe:\n%s', result)
-        return result
+    pipe = pipe.lstrip('|')
+    try:
+      p = subprocess.Popen(
+          [pipe], shell=True, close_fds=True,
+          stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    except IOError as error_message:
+      logging.error('IOerror opening pipe.')
+      if str(error_message):
+        self._PrintWarning(str(error_message))
+      return
 
-      except IOError:
-        logging.error('IOerror writing/reading from pipe.')
-        return
+    try:
+      result, _ = p.communicate(bytes(output, 'utf-8'))
+      logging.debug('Output written to pipe:\n%s', output)
+      logging.debug('Output read from pipe:\n%s', result)
+      return result
+
+    except IOError:
+      logging.error('IOerror writing/reading from pipe.')
+      return
 
   def Prompt(self):
     """Present prompt for further input."""
@@ -1414,7 +1408,7 @@ class TCLI(object):
       device = self.devices[device_name]
       attr_list = [device_name]
       # TODO(harro): Shouldn't need to call DEVICE_ATTRIBUTES directly.
-      for name in inventory.DEVICE_ATTRIBUTES.keys():
+      for name in inventory.DEVICE_ATTRIBUTES:
         if name == 'flags':
           continue
 
@@ -1557,9 +1551,9 @@ class TCLI(object):
     if args:
       value = args[0]
       value = value.lower()
-      if value == 'on' or value == 'true':
+      if value in ('on', 'true'):
         bool_result = True
-      elif value == 'off' or value == 'false':
+      elif value in ('off', 'false'):
         bool_result = False
       else:
         raise ValueError("Error: Argument must be 'on' or 'off'.")

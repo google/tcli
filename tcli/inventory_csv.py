@@ -177,7 +177,7 @@ class Inventory(inventory_base.Inventory):
     header_length = len(header_list)
 
     # pylint: disable=invalid-name
-    Device = collections.namedtuple('Device', header_list, verbose=False)
+    Device = collections.namedtuple('Device', header_list)
     # pylint: enable=invalid-name
     devices = collections.OrderedDict()
     # xreadlines would be better but not supported by StringIO for testing.

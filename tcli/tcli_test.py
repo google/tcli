@@ -241,18 +241,18 @@ class UnitTestTCLI(unittest.TestCase):
   def testTildeCompleter(self):
 
     self.assertEqual(
-        'record', self.tcli_obj._TildeCompleter(['reco'], 0))
+        '/record', self.tcli_obj._TildeCompleter('/reco', 0))
     self.assertEqual(
-        'record{}'.format(APPEND), self.tcli_obj._TildeCompleter(['reco'], 1))
+        '/record{}'.format(APPEND), self.tcli_obj._TildeCompleter('/reco', 1))
     self.assertEqual(
-        'recordall', self.tcli_obj._TildeCompleter(['reco'], 2))
+        '/recordall', self.tcli_obj._TildeCompleter('/reco', 2))
     self.assertEqual(
-        'recordall{}'.format(APPEND),
-        self.tcli_obj._TildeCompleter(['reco'], 3))
+        '/recordall{}'.format(APPEND),
+        self.tcli_obj._TildeCompleter('/reco', 3))
     self.assertEqual(
-        'recordstop', self.tcli_obj._TildeCompleter(['reco'], 4))
+        '/recordstop', self.tcli_obj._TildeCompleter('/reco', 4))
     self.assertEqual(
-        None, self.tcli_obj._TildeCompleter(['reco'], 5))
+        None, self.tcli_obj._TildeCompleter('/reco', 5))
 
   def testCmdCompleter(self):
     self.tcli_obj = tcli.TCLI()

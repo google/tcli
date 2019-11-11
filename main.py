@@ -48,6 +48,7 @@ def main(_):
   readline.set_completer(tcli_singleton.Completer)
   readline.parse_and_bind('tab: complete')
   readline.parse_and_bind('?: complete')
+  readline.set_completer_delims(' ')
   tcli_singleton.Motd()
 
   while True:
