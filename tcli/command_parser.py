@@ -108,8 +108,7 @@ class CommandParser(dict):
       raise ParseError('Unable to exec handler, "%s" has no handler.' %
                        command_name)
 
-    return self[command_name].handler.__call__(
-        command_name, args, append)
+    return self[command_name].handler.__call__(command_name, args, append)
 
   def ExecWithDefault(self, command_name):
     """Executes command handler with the default provided as the argument.
@@ -240,8 +239,7 @@ class CommandParser(dict):
   def RegisterCommand(self, command_name, help_str, short_name='', min_args=0,
                       max_args=1, default_value=None, append=False,
                       inline=False, raw_arg=False, regexp=False, toggle=False,
-                      handler=lambda *args, **kwargs: None,
-                      completer=lambda *args, **kwargs: None):
+                      handler=lambda: None, completer=lambda: None):
     """Adds command to parser so parser can determine if well-formed or not.
 
     Args:

@@ -220,7 +220,7 @@ class UnitTestCSVInventory(unittest.TestCase):
 
     # pylint: disable=invalid-name
     Device = collections.namedtuple(
-        'Device', ('pop', 'realm', 'vendor', 'flags'), verbose=False)
+        'Device', ('pop', 'realm', 'vendor', 'flags'))
     d1 = Device(vendor='juniper', realm='prod', pop='abc01', flags=['active'])
     d2 = Device(vendor='cisco', realm='prod', pop='xyz01', flags=[])
     d3 = Device(vendor='juniper', realm='lab', pop='abc01', flags=[])

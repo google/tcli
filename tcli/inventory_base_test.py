@@ -23,7 +23,7 @@ from tcli import inventory_base
 class InventoryBaseTest(unittest.TestCase):
 
   # pylint: disable=invalid-name
-  Device = collections.namedtuple('Device', (), verbose=False)
+  Device = collections.namedtuple('Device', ())
 
   @classmethod
   def setUpClass(cls):
