@@ -307,7 +307,7 @@ class Inventory(object):
 
     # Register commands specific to a source.
     for attribute in DEVICE_ATTRIBUTES.values():
-      if attribute.command_flag and attribute.command_flag in FLAGS:
+      if attribute.command_flag and attribute.attrib_name in FLAGS:
         default_value = getattr(FLAGS, attribute.attrib_name)
       else:
         default_value = attribute.default_value
