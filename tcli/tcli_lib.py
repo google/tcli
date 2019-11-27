@@ -1089,7 +1089,8 @@ class TCLI(object):
         # Some attributes are a list rather than a string, such as flags.
         # These are not supported by Clitable attribute matching
         # and we silently drop them here.
-        if not getattr(device, attr) or isinstance(attr, list):
+        if (not getattr(device, attr) or
+          isinstance(getattr(device, attr), list)):
           continue
 
         # The filter index uses capitilised first letter for column names.
