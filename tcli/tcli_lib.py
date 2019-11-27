@@ -1085,6 +1085,13 @@ class TCLI(object):
       device = self.devices[response.device_name]
       # TODO(harro): Referencing DEVICE_ATTRIBUTES directly should be avoided.
       for attr in inventory.DEVICE_ATTRIBUTES:
+
+        # Some attributes are a list rather than a string, such as flags.
+        # These are not supported by Clitable attribute matching
+        # and we silently drop them here.
+          if not getattr(device, attr) or isinstance(attr, list):
+            continue
+
         # The filter index uses capitilised first letter for column names.
         # For some values we capitilise part of the value.
         if inventory.DEVICE_ATTRIBUTES[attr].display_case == 'title':
