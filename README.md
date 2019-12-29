@@ -49,7 +49,7 @@ what system you are using to inventory those devices.
 
 The 'canned' example has been included as the default [inventory_csv.py](https://github.com/google/tcli/blob/master/tcli/inventory_csv.py) to
 illustrate how to do this. Please refer to the comments at the start of that
-file for instructions on custimising for your environment.
+file for instructions on customizing for your environment.
 
 It is hoped that contributors will submit libraries for some of the more
 popular opensources device accessor methods - notch, rancid and inventory systems - DNS, SQL.
