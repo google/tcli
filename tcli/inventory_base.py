@@ -47,7 +47,8 @@ TILDE_COMMAND_HELP = {
     Shortname: 'A'.""",
 
     'targets': """
-    Set target devices to receive commands (hostnames or IP addresses).
+    Set target devices to receive commands
+    (hostnames or IP addresses, comma separated, no spaces).
     If a target is prefixed with a '^' then it is
     treated as a regexp and implicitly ends with '.*$'.
     Regexp target list is expanded against devices.
