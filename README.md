@@ -25,7 +25,7 @@ that do not require a ctrl-c to terminate.
 ## Documentation
 
 ### Setup
-TCLI requires some setup bit can be run straight out of the box using some
+TCLI requires some setup but can be run straight out of the box using some
 fictictous devices and a limited set of commands that produce canned output:
 
 Devices
