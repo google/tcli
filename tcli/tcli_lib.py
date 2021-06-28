@@ -1188,7 +1188,7 @@ class TCLI(object):
       result, _ = p.communicate(bytes(output, 'utf-8'))
       logging.debug('Output written to pipe:\n%s', output)
       logging.debug('Output read from pipe:\n%s', result)
-      return result
+      return result.decode('utf-8')
 
     except IOError:
       logging.error('IOerror writing/reading from pipe.')

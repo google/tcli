@@ -1293,15 +1293,15 @@ class UnitTestTCLI(unittest.TestCase):
 
     # Piped function greps for 'boo' in supplied argument.
     self.tcli_obj.pipe = '/bin/grep boo'
-    self.assertEqual(b'boo\nboo\n', self.tcli_obj._Pipe('boo\nboo'))
+    self.assertEqual('boo\nboo\n', self.tcli_obj._Pipe('boo\nboo'))
     self.tcli_obj.pipe = '/bin/grep boo'
-    self.assertEqual(b'boo\n', self.tcli_obj._Pipe('boo\nhoo'))
+    self.assertEqual('boo\n', self.tcli_obj._Pipe('boo\nhoo'))
 
     # Tests that pipes are supported within the piping function.
     self.tcli_obj.pipe = '/bin/grep boo | /bin/grep -v hoo'
-    self.assertEqual(b'boo\n', self.tcli_obj._Pipe('boo\nhoo'))
+    self.assertEqual('boo\n', self.tcli_obj._Pipe('boo\nhoo'))
     self.tcli_obj.pipe = '/bin/grep boo | /bin/grep -v boo'
-    self.assertEqual(b'', self.tcli_obj._Pipe('boo\nhoo'))
+    self.assertEqual('', self.tcli_obj._Pipe('boo\nhoo'))
 
   def testTildeExpandTargets(self):
     """Tests target expansion."""
