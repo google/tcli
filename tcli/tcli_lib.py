@@ -88,14 +88,14 @@ MOTD = '#!' + '#' * 76 + '!#' + """
 #! Note: Beta code, use with caution.
 #!
 #! Type '%shelp' to get started.
-#! To disable color: '%scolor off.
+#! To disable color: '%scolor off'.
 #!
 #! For more guidance see:
 #! https://github.com/google/tcli
 #!
 #! Note:
 #! Interactive TCLI starts in safe mode (indicated by '*' in the prompt).
-#! To disable safe mode: %ssafemode off.
+#! To disable safe mode: '%ssafemode off'.
 #!
 #! Have a nice day!
 #!""".replace('%s', TILDE) + '#' * 76 + '!#'
