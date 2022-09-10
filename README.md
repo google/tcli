@@ -1,26 +1,26 @@
-# TCLI - TextFSM Device CLI
+# TCLI – TextFSM Device CLI
 
 This is not an officially supported Google product
 
 ## Overview
 
-TCLI - client interface for issuing commands to any number of devices.
+TCLI – client interface for issuing commands to any number of devices.
 
 Supports batch and interactive modes and multiple display formats.
 
-Handy for performing troubleshooting and generating reports etc from
+Handy for performing, troubleshooting, and generating reports from
 arbitrarily large numbers of live devices.
 
 ## Cautions and Caveats
 
 Empowers users to run commands across potentially large sets of devices with
-very few restrictions - please use wisely and cautiously.
+very few restrictions – please use wisely and cautiously.
 
-Does not support commands that are multi-part, or have non-descreet responses
+Does not support commands that are multi-part, or have non-discrete responses
 e.g. the **ping** command.
-**Note:** You can still use commands like
-**ping count 5 127.0.0.1** or **monitor traffic brief count 2**
-that do not require a ctrl-c to terminate.
+
+Note: You can still use commands like `ping count 5 127.0.0.1` or
+`monitor traffic brief count 2` that do not require a Ctrl+C to terminate.
 
 ## Documentation
 
@@ -52,7 +52,7 @@ illustrate how to do this. Please refer to the comments at the start of that
 file for instructions on customizing for your environment.
 
 It is hoped that contributors will submit libraries for some of the more
-popular opensources device accessor methods - notch, rancid and inventory systems - DNS, SQL.
+popular open source device accessor methods – notch, rancid and inventory systems – DNS, SQL.
 
 Once setup for your environment, then the Power Users guide will get you up and running fast!
 
@@ -63,7 +63,7 @@ Follow the instructions below for how to create new templates to display output 
 
 [TextTableFSM](https://github.com/google/textfsm/wiki/Code-Lab)
 
-There are opensource template repositories such as [ntc-templates](https://github.com/networktocode/ntc-templates)
+There are open source template repositories such as [ntc-templates](https://github.com/networktocode/ntc-templates)
 that provide structured output for many common commands.
 
 Before contributing
