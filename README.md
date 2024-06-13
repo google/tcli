@@ -1,5 +1,7 @@
 # TCLI – TextFSM Device CLI
 
+> Forked from https://github.com/google/tcli - as that repo is now read-only.
+
 ## Overview
 
 TCLI is a client interface for issuing commands to any number of devices which
@@ -46,8 +48,7 @@ To use in your environment it will need to be integrated to call your device
 accessor system and also retrieve a device list from whatever system you are
 using to inventory those devices.
 
-The "canned" example has been included as the default
-[**inventory_csv.py**](https://github.com/google/tcli/blob/master/tcli/inventory_csv.py)
+The "canned" example has been included as the default [**inventory_csv.py**](https://github.com/google/tcli/blob/master/tcli/inventory_csv.py)
 to illustrate how to do this. Please refer to the comments at the start of that
 file for instructions on customizing your environment.
 
@@ -58,11 +59,9 @@ Once setup for your environment, then the Power Users guide will get you up and
 running fast!<br>
 [TCLI Power Users Guide](https://github.com/google/tcli/wiki/TCLI-Power-Users-Guide)
 
-The structured format for device output is enable via
-[TextFSM](https://github.com/google/tcli). Follow the instructions below to
+The structured format for device output is enable via [TextFSM](https://github.com/google/tcli). Follow the instructions below to
 create new templates to display output in CSV or other structured formats.<br>
 [TextTableFSM](https://github.com/google/textfsm/wiki/Code-Lab)
 
-There are open source template repositories such as
-[ntc-templates](https://github.com/networktocode/ntc-templates) that provide
+There are open source template repositories such as [ntc-templates](https://github.com/networktocode/ntc-templates) that provide
 structured output for many common commands.
