@@ -17,10 +17,6 @@
   Used to collate returned responses prior to outputing to the user.
 """
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import threading
 from absl import logging
 import tqdm

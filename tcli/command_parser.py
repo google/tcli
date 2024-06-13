@@ -93,11 +93,11 @@ class CommandParser(dict):
     if line:
       command_name = self._ShortCommand(line[0])
       if command_name:
-        line = line[1:]
+        line = line[1 :]
         # Short commands optionally have the APPEND suffix.
         if line and line[0] == APPEND:
           append = True
-          line = line[1:]
+          line = line[1 :]
         line = line.lstrip(' ')
     return (command_name, line, append)
 
@@ -193,7 +193,7 @@ class CommandParser(dict):
       if ' ' in line:
         command_end = line.index(' ')
         command_name = line[:command_end]
-        line = line[command_end:]
+        line = line[command_end :]
       else:
         command_name = line
         line = ''

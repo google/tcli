@@ -14,10 +14,6 @@
 
 """Tests for tcli.command_response."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 from absl.testing import absltest as unittest
 import mock
 from tcli import command_response

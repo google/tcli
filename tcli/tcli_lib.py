@@ -42,10 +42,6 @@ Starts in 'safe mode' when run interactively, toggle with '%sS' or '%ssafemode'.
 """
 
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import copy
 import os
 import re
@@ -659,7 +655,7 @@ class TCLI(object):
     # Pass subsequent arguments of a command to its completer.
     if ' ' in full_line:
       cmd = full_line[1:full_line.index(' ')]
-      arg_string = full_line[full_line.index(' ') +1:]
+      arg_string = full_line[full_line.index(' ') + 1 :]
       completer_list = []
       if self.cli_parser.GetCommand(cmd):
         for arg_options in self.cli_parser.GetCommand(cmd).completer():
@@ -674,7 +670,7 @@ class TCLI(object):
     completer_list = []
     for cmd in self.cli_parser:
       # Strip TILDE and compare.
-      if cmd.startswith(full_line[1:]):
+      if cmd.startswith(full_line[1 :]):
         completer_list.append(cmd)
         if self.cli_parser.GetCommand(cmd).append:
           completer_list.append(cmd + command_parser.APPEND)
@@ -781,7 +777,7 @@ class TCLI(object):
       if command.startswith(TILDE):
         _FlushCommands(command_list)
         # Remove tilde command prefix and submit to TCLI command interpreter.
-        self.TildeCmd(command[1:])
+        self.TildeCmd(command[1 :])
       else:
         # Backend commands.
         # Look for inline tilde commands.
@@ -955,7 +951,7 @@ class TCLI(object):
     token_list = command.split(' %s' % (TILDE * 2))
     # If all tokens parse then the first token is the commandline.
     command_left = token_list[0]
-    command_right = token_list[1:]
+    command_right = token_list[1 :]
     # Reverse the order of the tokens so that we work right to left.
     command_right.reverse()
     index = len(command_right)

@@ -47,7 +47,7 @@ class CommandParserTest(unittest.TestCase):
     self.cmd_parser.RegisterCommand('a', '', default_value=None)
     self.cmd_parser.RegisterCommand('b', '', default_value='abc')
     self.cmd_parser.RegisterCommand('c', '', default_value=10)
-    self.assertEqual(None, self.cmd_parser.GetDefault('a'))
+    self.assertIsNone(self.cmd_parser.GetDefault('a'))
     self.assertEqual('abc', self.cmd_parser.GetDefault('b'))
     self.assertEqual(10, self.cmd_parser.GetDefault('c'))
 

@@ -14,10 +14,6 @@
 
 """Tests for tcli.inventory_csv."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import collections
 from io import StringIO    # pylint: disable=g-importing-member
 from absl.testing import absltest as unittest

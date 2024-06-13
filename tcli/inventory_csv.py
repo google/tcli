@@ -33,10 +33,6 @@ server, which may be one of:
 ... or something else entirely.
 """
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import collections
 import os
 from absl import flags
@@ -173,7 +169,7 @@ class Inventory(inventory_base.Inventory):
           'Column named "device" must be first column of header.\n'
           'Found: "%s".' % header_str)
     # Strip device, it will be used for the index.
-    header_list = header_list[1:]
+    header_list = header_list[1 :]
     header_length = len(header_list)
 
     # pylint: disable=invalid-name
@@ -190,12 +186,12 @@ class Inventory(inventory_base.Inventory):
       # Strip excess whitespace.
       row_list = [l.strip() for l in row_list]
       device_name = row_list[0]
-      row_list = row_list[1:]
+      row_list = row_list[1 :]
       if header_list[-1] == 'flags':
         # Provided the last header is 'flags' then accept extra columns.
         # Entries that trail on the rhs are gathered into a list under flags.
-        device_flags = row_list[header_length-1:]
-        row_list = row_list[0:header_length-1]
+        device_flags = row_list[header_length - 1 :]
+        row_list = row_list[0:header_length - 1]
         row_list.append(device_flags)
       try:
         devices[device_name] = Device(*row_list)

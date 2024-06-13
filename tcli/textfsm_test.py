@@ -14,10 +14,6 @@
 
 """Unittest for textfsm module."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 from io import StringIO    # pylint: disable=g-importing-member
 from absl import flags
 from absl.testing import absltest as unittest

@@ -16,10 +16,6 @@
 
 """Unittest for tcli script."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import collections
 import copy
 import os
@@ -251,8 +247,7 @@ class UnitTestTCLI(unittest.TestCase):
         self.tcli_obj._TildeCompleter('/reco', 3))
     self.assertEqual(
         '/recordstop', self.tcli_obj._TildeCompleter('/reco', 4))
-    self.assertEqual(
-        None, self.tcli_obj._TildeCompleter('/reco', 5))
+    self.assertIsNone(self.tcli_obj._TildeCompleter('/reco', 5))
 
   def testCmdCompleter(self):
     self.tcli_obj = tcli.TCLI()
@@ -266,19 +261,19 @@ class UnitTestTCLI(unittest.TestCase):
 
     self.assertEqual('show', self.tcli_obj._CmdCompleter('', 0))
     self.assertEqual('cat', self.tcli_obj._CmdCompleter('', 1))
-    self.assertEqual(None, self.tcli_obj._CmdCompleter('', 2))
+    self.assertIsNone(self.tcli_obj._CmdCompleter('', 2))
 
     self.assertEqual('cat', self.tcli_obj._CmdCompleter('c', 0))
-    self.assertEqual(None, self.tcli_obj._CmdCompleter('c', 1))
+    self.assertIsNone(self.tcli_obj._CmdCompleter('c', 1))
 
     self.assertEqual('alpha', self.tcli_obj._CmdCompleter('c ', 0))
     self.assertEqual('beta', self.tcli_obj._CmdCompleter('c ', 1))
     self.assertEqual('epsilon', self.tcli_obj._CmdCompleter('c ', 2))
-    self.assertEqual(None, self.tcli_obj._CmdCompleter('c ', 3))
+    self.assertIsNone(self.tcli_obj._CmdCompleter('c ', 3))
 
     self.assertEqual(
         'alpha', self.tcli_obj._CmdCompleter('c al', 0))
-    self.assertEqual(None, self.tcli_obj._CmdCompleter('c al', 1))
+    self.assertIsNone(self.tcli_obj._CmdCompleter('c al', 1))
 
   def testCallback(self):
     """Tests async callback."""
@@ -935,17 +930,17 @@ class UnitTestTCLI(unittest.TestCase):
     self.assertEqual('hoo2', self.tcli_obj.logall)
 
     self.tcli_obj.TildeCmd('recordstop boo')
-    self.assertEqual(None, self.tcli_obj.record)
+    self.assertIsNone(self.tcli_obj.record)
     self.tcli_obj.TildeCmd('recordstop hoo')
-    self.assertEqual(None, self.tcli_obj.recordall)
+    self.assertIsNone(self.tcli_obj.recordall)
 
     # Clears log but not logall.
     self.tcli_obj.TildeCmd('logstop boo2')
-    self.assertEqual(None, self.tcli_obj.log)
+    self.assertIsNone(self.tcli_obj.log)
     self.assertEqual('hoo2', self.tcli_obj.logall)
 
     self.tcli_obj.TildeCmd('logstop hoo2')
-    self.assertEqual(None, self.tcli_obj.logall)
+    self.assertIsNone(self.tcli_obj.logall)
 
     self.tcli_obj.record = None
     self.tcli_obj.recordall = None
@@ -958,7 +953,7 @@ class UnitTestTCLI(unittest.TestCase):
     self.assertEqual('hello', self.tcli_obj.record)
     self.assertEqual('world', self.tcli_obj.recordall)
     self.tcli_obj.TildeCmd('logstop hello')
-    self.assertEqual(None, self.tcli_obj.record)
+    self.assertIsNone(self.tcli_obj.record)
     self.assertEqual('world', self.tcli_obj.recordall)
 
     self.tcli_obj.record = None
@@ -972,9 +967,9 @@ class UnitTestTCLI(unittest.TestCase):
     self.tcli_obj.TildeCmd('recordall hello')
     self.assertEqual('hello', self.tcli_obj.log)
     self.assertEqual('world', self.tcli_obj.logall)
-    self.assertEqual(None, self.tcli_obj.recordall)
+    self.assertIsNone(self.tcli_obj.recordall)
     self.tcli_obj.TildeCmd('logstop hello')
-    self.assertEqual(None, self.tcli_obj.log)
+    self.assertIsNone(self.tcli_obj.log)
     self.assertEqual('world', self.tcli_obj.logall)
 
     self.tcli_obj.record = None
@@ -989,7 +984,7 @@ class UnitTestTCLI(unittest.TestCase):
     self.assertEqual('hello', self.tcli_obj.record)
     self.assertEqual('world', self.tcli_obj.recordall)
     self.tcli_obj.TildeCmd('logstop hello')
-    self.assertEqual(None, self.tcli_obj.record)
+    self.assertIsNone(self.tcli_obj.record)
     self.assertEqual('world', self.tcli_obj.recordall)
 
     self.tcli_obj.record = None
@@ -1003,9 +998,9 @@ class UnitTestTCLI(unittest.TestCase):
     self.tcli_obj.TildeCmd('recordall{} hello'.format(APPEND))
     self.assertEqual('hello', self.tcli_obj.log)
     self.assertEqual('world', self.tcli_obj.logall)
-    self.assertEqual(None, self.tcli_obj.recordall)
+    self.assertIsNone(self.tcli_obj.recordall)
     self.tcli_obj.TildeCmd('logstop hello')
-    self.assertEqual(None, self.tcli_obj.log)
+    self.assertIsNone(self.tcli_obj.log)
     self.assertEqual('world', self.tcli_obj.logall)
 
   def testTildeBufferRecord(self):
@@ -1040,7 +1035,7 @@ class UnitTestTCLI(unittest.TestCase):
     self.tcli_obj.TildeCmd('logstop hello')
     self.tcli_obj.TildeCmd('record hello')
     self.assertEqual('hello', self.tcli_obj.record)
-    self.assertEqual(None, self.tcli_obj.buffers.GetBuffer('hello'))
+    self.assertIsNone(self.tcli_obj.buffers.GetBuffer('hello'))
 
     # Record to the newly cleared buffer.
     self.tcli_obj.ParseCommands('A test')
@@ -1074,7 +1069,7 @@ class UnitTestTCLI(unittest.TestCase):
     self.tcli_obj.TildeCmd('logall world')
     self.tcli_obj.ParseCommands('A test')
     self.tcli_obj.TildeCmd('logstop hello')
-    self.assertEqual(None, self.tcli_obj.recordall)
+    self.assertIsNone(self.tcli_obj.recordall)
     self.tcli_obj.ParseCommands('A two\nline test')
     self.assertEqual(
         '%slogall world\nA test' % tcli.TILDE,
@@ -1092,15 +1087,15 @@ class UnitTestTCLI(unittest.TestCase):
     # Record to buffer already in use
     self.tcli_obj.logall = 'hello'
     self.tcli_obj.TildeCmd('record hello')
-    self.assertEqual(None, self.tcli_obj.record)
+    self.assertIsNone(self.tcli_obj.record)
     self.tcli_obj.TildeCmd('recordall hello')
-    self.assertEqual(None, self.tcli_obj.recordall)
+    self.assertIsNone(self.tcli_obj.recordall)
     self.tcli_obj.TildeCmd('log hello')
-    self.assertEqual(None, self.tcli_obj.log)
+    self.assertIsNone(self.tcli_obj.log)
     self.tcli_obj.logall = None
     self.tcli_obj.record = 'hello'
     self.tcli_obj.TildeCmd('logall hello')
-    self.assertEqual(None, self.tcli_obj.logall)
+    self.assertIsNone(self.tcli_obj.logall)
 
   def testTildeBufferLog(self):
     """Tests logging of commands to a buffer."""
@@ -1232,7 +1227,7 @@ class UnitTestTCLI(unittest.TestCase):
       self.tcli_obj.TildeCmd('play boo')
       mock_warning.assert_called_once_with(
           "Buffer: boo, already open by 'play' command.")
-      self.assertEqual(None, self.tcli_obj.recordall)
+      self.assertIsNone(self.tcli_obj.recordall)
 
   def testTildeBufferRecursivePlay3(self):
     """Cannot play from a buffer that is being recorded to."""
@@ -1279,7 +1274,7 @@ class UnitTestTCLI(unittest.TestCase):
 
     self.tcli_obj.buffers.Append('boo', 'hello\nworld')
     self.tcli_obj.TildeCmd('clear boo')
-    self.assertEqual(None, self.tcli_obj.buffers.GetBuffer('boo'))
+    self.assertIsNone(self.tcli_obj.buffers.GetBuffer('boo'))
 
     # Clearing a nonexistant buffer fails silently.
     self.tcli_obj.TildeCmd('clear non_exist')

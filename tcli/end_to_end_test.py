@@ -14,10 +14,6 @@
 
 """End to end system test of TCLI, includes dependency on libraries."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import importlib
 import os
 from absl import flags
@@ -110,7 +106,7 @@ class UnitTestTCLIEndToEnd(unittest.TestCase):
           mock.call(OUTPUT_B)])
 
     # RC script ignored.
-    self.assertEqual(None, gcl_obj.log)
+    self.assertIsNone(gcl_obj.log)
 
 
 if __name__ == '__main__':

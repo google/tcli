@@ -25,10 +25,6 @@ implememtations override the corresponding private methods to provide
 source specific support.
 """
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import collections
 import re
 import sre_constants
@@ -406,10 +402,10 @@ class Inventory(object):
             self._CmdFilter(attr, [], append)
       else:
         if command_name == 'attributes':
-          self._CmdFilter(args[0], args[1:], append)
+          self._CmdFilter(args[0], args[1 :], append)
         else:
           # 'xattributes' so add 'x' prefix to attribute.
-          self._CmdFilter('x' + args[0], args[1:], append)
+          self._CmdFilter('x' + args[0], args[1 :], append)
       return
 
     # Filter may be inclusive, or exclusive.
@@ -494,7 +490,7 @@ class Inventory(object):
         attribute = filter_name
         # Trim off the 'x' prefix for matching exclusions against attributes.
         if filter_name.startswith('x'):
-          attribute = attribute[1:]
+          attribute = attribute[1 :]
 
         if attribute == 'targets':
           # Warn user if literal is unknown, skip warning in batch mode
@@ -591,7 +587,7 @@ class Inventory(object):
 
     if caps > len(label):
       caps = len(label)
-    label = label[0:caps].upper() + label[caps:]
+    label = label[0:caps].upper() + label[caps :]
     return '%s: %s' % (label, value)
 
   def _ShowEnv(self):
@@ -654,7 +650,7 @@ class Inventory(object):
         attr_value = devicename
       else:
         # Strip 'x' prefix.
-        stripped_attr = attr[1:]
+        stripped_attr = attr[1 :]
         attr_value = getattr(device_attrs, stripped_attr, None)
         # Devices without this attribute are ignored.
         if attr_value is None:

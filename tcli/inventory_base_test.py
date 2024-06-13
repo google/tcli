@@ -47,8 +47,8 @@ class InventoryBaseTest(unittest.TestCase):
     self.inv._devicelist = 'something'
     self.inv._filters['targets'] = 'something'
     self.assertEqual('', self.inv._ChangeFilter('targets', '^'))
-    self.assertEqual(None, self.inv._literals_filter['targets'])
-    self.assertEqual(None, self.inv._compiled_filter['targets'])
+    self.assertIsNone(self.inv._literals_filter['targets'])
+    self.assertIsNone(self.inv._compiled_filter['targets'])
 
     self.assertEqual('abc,^xyz', self.inv._ChangeFilter('targets', 'abc,^xyz'))
     self.assertEqual(['abc'], self.inv._literals_filter['targets'])
@@ -97,7 +97,7 @@ class InventoryBaseTest(unittest.TestCase):
     self.assertEqual(
         None, self.inv._CmdFilterCompleter([''], len(self.inv.ATTRIBUTES)))
     self.assertEqual('pear', self.inv._CmdFilterCompleter(['p'], 0))
-    self.assertEqual(None, self.inv._CmdFilterCompleter(['p', 'bogus'], 0))
+    self.assertIsNone(self.inv._CmdFilterCompleter(['p', 'bogus'], 0))
 
   def testCmdFilter(self):
     """Tests that command handler sets the string value of the filters."""
