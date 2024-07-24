@@ -20,7 +20,6 @@ import collections
 import copy
 import os
 from absl import flags
-#from absl.testing import absltest as unittest
 import unittest
 from unittest import mock
 from tcli import tcli_lib as tcli
