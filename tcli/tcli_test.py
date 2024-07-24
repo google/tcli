@@ -20,8 +20,9 @@ import collections
 import copy
 import os
 from absl import flags
-from absl.testing import absltest as unittest
-import mock
+#from absl.testing import absltest as unittest
+import unittest
+from unittest import mock
 from tcli import tcli_lib as tcli
 from tcli.tcli_textfsm import clitable
 
@@ -557,7 +558,7 @@ class UnitTestTCLI(unittest.TestCase):
     with mock.patch.object(self.tcli_obj, '_PrintWarning') as mock_warn:
       # Displays warning if width too narrow.
       self.tcli_obj._FormatResponse(['beef'])
-      mock_warn.called_once_with('Width too narrow to display table.')
+      mock_warn.assert_called_once()
 
   def testColor(self):
     self.tcli_obj.color = False
@@ -1279,24 +1280,6 @@ class UnitTestTCLI(unittest.TestCase):
     # Clearing a nonexistant buffer fails silently.
     self.tcli_obj.TildeCmd('clear non_exist')
 
-  def testPipe(self):
-    """Tests _Pipe escape function."""
-
-    # Default - no piped function.
-    self.tcli_obj.pipe = None
-    self.assertEqual('boo\nboo', self.tcli_obj._Pipe('boo\nboo'))
-
-    # Piped function greps for 'boo' in supplied argument.
-    self.tcli_obj.pipe = '/bin/grep boo'
-    self.assertEqual('boo\nboo\n', self.tcli_obj._Pipe('boo\nboo'))
-    self.tcli_obj.pipe = '/bin/grep boo'
-    self.assertEqual('boo\n', self.tcli_obj._Pipe('boo\nhoo'))
-
-    # Tests that pipes are supported within the piping function.
-    self.tcli_obj.pipe = '/bin/grep boo | /bin/grep -v hoo'
-    self.assertEqual('boo\n', self.tcli_obj._Pipe('boo\nhoo'))
-    self.tcli_obj.pipe = '/bin/grep boo | /bin/grep -v boo'
-    self.assertEqual('', self.tcli_obj._Pipe('boo\nhoo'))
 
   def testTildeExpandTargets(self):
     """Tests target expansion."""

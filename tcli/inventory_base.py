@@ -27,7 +27,6 @@ source specific support.
 
 import collections
 import re
-import sre_constants
 import threading
 from absl import flags
 from absl import logging
@@ -737,8 +736,8 @@ class Inventory(object):
     # Block reads of the devices until loaded.
     self._devices_loaded.clear()
     self._devices_thread = threading.Thread(name='Device loader',
-                                            target=self._AsyncLoadDevices)
-    self._devices_thread.setDaemon(True)
+                                            target=self._AsyncLoadDevices,
+                                            daemon=True)
     self._devices_thread.start()
 
   def _Match(self, attr, attr_value):
