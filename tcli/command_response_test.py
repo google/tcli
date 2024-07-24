@@ -155,17 +155,17 @@ class UnitTestCmdResponse(unittest.TestCase):
     self.cmd_response.AddResponse(FakeCmdResponse('forth_uid'))
 
     self.assertFalse(self.cmd_response._current_row)
-    self.assertFalse(self.cmd_response.done.isSet())
+    self.assertFalse(self.cmd_response.done.is_set())
     self.assertEqual((['third_uid', 'forth_uid'], 'boohoo'),
                      self.cmd_response.GetRow())
-    self.assertFalse(self.cmd_response.done.isSet())
+    self.assertFalse(self.cmd_response.done.is_set())
     self.assertEqual((['first_uid', 'second_uid'], 'testing'),
                      self.cmd_response.GetRow())
-    self.assertFalse(self.cmd_response.done.isSet())
+    self.assertFalse(self.cmd_response.done.is_set())
     self.assertEqual(2, self.cmd_response._current_row)
     self.assertFalse(self.cmd_response.GetRow())
     self.assertEqual(2, self.cmd_response._current_row)
-    self.assertTrue(self.cmd_response.done.isSet())
+    self.assertTrue(self.cmd_response.done.is_set())
 
 
 if __name__ == '__main__':
