@@ -1057,7 +1057,7 @@ class TCLI(object):
           'No filter set, cannot display in %s format' % repr(self.display))
       return
 
-    result = None
+    result = {}
     for response_uid in response_uid_list:
       response = self.cmd_response.GetResponse(response_uid)
       if not response:
@@ -1116,22 +1116,20 @@ class TCLI(object):
 
       # Is this the first line.
       if not result:
-        # Print header line for new table and initialise record.
+        # Print header line for this command response.
         self._PrintOutput('#!# %s #!#' % response.command, title=True)
-        result = copy.deepcopy(self.filter_engine)
-      # Next line has incompatible row header.
-      # Display previous table and start new table.
-      elif str(self.filter_engine.header) != str(result.header):
-        self._DisplayTable(result, pipe=pipe)
-        result = copy.deepcopy(self.filter_engine)
-      else:
-        # Add record to existing table.
-        result += self.filter_engine
 
-    if result:
+      if str(self.filter_engine.header) not in result:
+        # Copy initial command result, then append the rest as rows.
+        # There will be a separate table for each unique set of table columns.
+        result[str(self.filter_engine.header)] = copy.deepcopy(self.filter_engine)
+      else:
+        result[str(self.filter_engine.header)] += self.filter_engine
+
+    for command_tbl in result:
       if FLAGS.sorted:
-        result.sort()
-      self._DisplayTable(result, pipe=pipe)
+        result[command_tbl].sort()
+      self._DisplayTable(result[command_tbl], pipe=pipe)
 
   def _DisplayTable(self, result, pipe=''):
     """Displays output in tabular form."""

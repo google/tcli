@@ -515,7 +515,7 @@ class UnitTestTCLI(unittest.TestCase):
 
     # Multiple entry - Mixed vendors.
     with mock.patch.object(self.tcli_obj, '_PrintOutput') as mock_output:
-      self.tcli_obj._FormatResponse(['deed', 'deed', 'dead', 'dead'])
+      self.tcli_obj._FormatResponse(['deed', 'dead', 'deed', 'dead'])
       mock_output.assert_has_calls([
           mock.call(header, title=True),
           mock.call('Host, ColCa, ColCb\n'
