@@ -163,7 +163,7 @@ class CommandParser(dict):
   def InlineOnly(self):
     """Unregister all non-inline commands from parser."""
 
-    for command_name in [c for c in self.keys()]:
+    for command_name in [c for c in self]:
       if not self[command_name].inline:
         self.UnRegisterCommand(command_name)
 

@@ -114,7 +114,7 @@ class UnitTestCSVInventory(unittest.TestCase):
   def testFetchDevices(self):
     """Tests directly loading device inventory from CSV file."""
     self.inv._FetchDevices()
-    devices = self.inv.devices.keys()
+    devices = self.inv.devices
     self.assertCountEqual(['device_a', 'device_b', 'device_c'], devices)
 
   def testDeviceList(self):

@@ -55,4 +55,4 @@ class TextBuffer(object):
 
   def ListBuffers(self):
     """Returns list of buffers that exist (created and not cleared)."""
-    return ' '.join(sorted(self._buffers.keys()))
+    return ' '.join(sorted(self._buffers))

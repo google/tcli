@@ -181,7 +181,7 @@ class Inventory(object):
 
     # Filters and exclusions added by this library.
     logging.debug('Device attributes statically defined: "%s".',
-                  DEVICE_ATTRIBUTES.keys())
+                  DEVICE_ATTRIBUTES)
     for attr in DEVICE_ATTRIBUTES:
       if attr == 'flags':
         # TODO(harro): Add support for filtering on flag values.
@@ -495,7 +495,7 @@ class Inventory(object):
           # Warn user if literal is unknown, skip warning in batch mode
           # as it is less valuable in this context and would trigger a
           # re-retrieval of the inventory.
-          validate_list = self._GetDevices().keys()
+          validate_list = self._GetDevices()
 
         elif (attribute in DEVICE_ATTRIBUTES and
               DEVICE_ATTRIBUTES[attribute].valid_values):
