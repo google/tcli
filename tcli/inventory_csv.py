@@ -147,7 +147,7 @@ class Inventory(inventory_base.Inventory):
     # ...
     # }
     #
-    # So we built an OrderedDict of NamedTuples using the 'collections' library.
+    # So we built an ordered dict of NamedTuples (python 3.6)
     # We enforce 'device' as the header of the first column and 'flags' as
     # the header of an optional list in the last column.
 
@@ -175,7 +175,7 @@ class Inventory(inventory_base.Inventory):
     # pylint: disable=invalid-name
     Device = collections.namedtuple('Device', header_list)
     # pylint: enable=invalid-name
-    devices = collections.OrderedDict()
+    devices = {}
     # xreadlines would be better but not supported by StringIO for testing.
     for line in buf:
       # Support commented lines, provide '#' is first character of line.

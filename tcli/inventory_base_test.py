@@ -32,7 +32,6 @@ class InventoryBaseTest(unittest.TestCase):
 
   def setUp(self):
     super(InventoryBaseTest, self).setUp()
-    inventory_base._DeviceQuery = mock.MagicMock()
     with mock.patch.object(inventory_base.Inventory, 'LoadDevices'):
       self.inv = inventory_base.Inventory(batch=False)
 
@@ -40,11 +39,10 @@ class InventoryBaseTest(unittest.TestCase):
     """Tests changing the targets filters."""
 
     self.inv._GetDevices = mock.Mock(
-        return_value=collections.OrderedDict(
-            [('abc', self.Device()), ('xyz', self.Device())]))
+        return_value={'abc': self.Device(), 'xyz': self.Device()})
 
     # '^' clears targets.
-    self.inv._devicelist = 'something'
+    self.inv._device_list = ['something']
     self.inv._filters['targets'] = 'something'
     self.assertEqual('', self.inv._ChangeFilter('targets', '^'))
     self.assertIsNone(self.inv._literals_filter['targets'])
@@ -89,13 +87,13 @@ class InventoryBaseTest(unittest.TestCase):
   def testCmdFilterCompleter(self):
     """Tests completer registered to a command."""
 
-    self.inv.ATTRIBUTES = ['apple', 'pear']
-    self.assertEqual(self.inv.ATTRIBUTES[0],
+    inventory_base.DEVICE_ATTRIBUTES = ['apple', 'pear']
+    self.assertEqual(inventory_base.DEVICE_ATTRIBUTES[0],
                      self.inv._CmdFilterCompleter([''], 0))
-    self.assertEqual(self.inv.ATTRIBUTES[1],
+    self.assertEqual(inventory_base.DEVICE_ATTRIBUTES[1],
                      self.inv._CmdFilterCompleter([''], 1))
     self.assertEqual(
-        None, self.inv._CmdFilterCompleter([''], len(self.inv.ATTRIBUTES)))
+        None, self.inv._CmdFilterCompleter([''], len(inventory_base.DEVICE_ATTRIBUTES)))
     self.assertEqual('pear', self.inv._CmdFilterCompleter(['p'], 0))
     self.assertIsNone(self.inv._CmdFilterCompleter(['p', 'bogus'], 0))
 
@@ -106,7 +104,7 @@ class InventoryBaseTest(unittest.TestCase):
         'abc': self.Device(),
         'xyz': self.Device(),
         'bogus': self.Device()
-        }
+    }
     # Defaults
     self.assertEqual('Targets: ', self.inv._CmdFilter('targets', []))
     self.assertEqual('XTargets: ', self.inv._CmdFilter('xtargets', []))
@@ -128,7 +126,7 @@ class InventoryBaseTest(unittest.TestCase):
         'abc': self.Device(),
         'xyz': self.Device(),
         'bogus': self.Device()
-        }
+    }
     # New values
     self.inv._CmdFilter('attributes', ['targets', 'abc'])
     self.assertEqual('abc', self.inv._filters['targets'])
@@ -156,8 +154,7 @@ class InventoryBaseTest(unittest.TestCase):
     """Tests exclusion logic for filters."""
 
     dev_attr = collections.namedtuple('dev_attr', ['a', 'b', 'c'])
-    self.inv._exclusions = collections.OrderedDict(
-        [('xa', 'alpha'), ('xb', 'beta'), ('xc', 'charlie')])
+    self.inv._exclusions = {'xa': 'alpha', 'xb': 'beta', 'xc': 'charlie'}
     with mock.patch.object(self.inv, '_Match', return_value=True) as mock_match:
       self.inv._Excluded('device_a', dev_attr(a='alpha', b='beta', c='charlie'))
       # First match is all that is needed.
@@ -183,8 +180,7 @@ class InventoryBaseTest(unittest.TestCase):
     """Tests inclusion logic for filters."""
 
     dev_attr = collections.namedtuple('dev_attr', ['a', 'b', 'c'])
-    self.inv._filters = collections.OrderedDict(
-        [('a', 'alpha'), ('b', 'beta'), ('c', '')])
+    self.inv._filters = {'a': 'alpha', 'b': 'beta', 'c': ''}
     with mock.patch.object(self.inv, '_Match', return_value=True) as mock_match:
       self.inv._Included('device_a', dev_attr(a='alpha', b='beta', c='charlie'))
       # Compares a Match for each non-blank filter.
@@ -258,8 +254,7 @@ class InventoryBaseTest(unittest.TestCase):
     self.inv._devices = {
         'first': self.Device(),
         'second': self.Device(),
-        'third': self.Device()
-        }
+        'third': self.Device()}
     self.inv._CmdFilter('targets', ['^f.*,second,^t.ird'])
     self.inv._CmdFilter('xtargets', [''])
     self.inv._device_list = None
@@ -268,9 +263,9 @@ class InventoryBaseTest(unittest.TestCase):
   def testTargets(self):
     """Tests setting targets value and resultant device lists."""
 
-    self.inv._devices = collections.OrderedDict([
-        ('device_a', self.Device()), ('device_b', self.Device()),
-        ('device_c', self.Device()), ('bogus', self.Device())])
+    self.inv._devices = {
+        'device_a': self.Device(), 'device_b': self.Device(),
+        'device_c': self.Device(), 'bogus': self.Device()}
 
     # Null command with no targets.
     self.assertEqual('Targets: ', self.inv._CmdFilter('targets', []))
@@ -311,9 +306,9 @@ class InventoryBaseTest(unittest.TestCase):
   def testXtargets(self):
     """Tests exclusions filters for targets adn resultant device lists."""
 
-    self.inv._devices = collections.OrderedDict([
-        ('device_a', self.Device()), ('device_b', self.Device()),
-        ('device_c', self.Device()), ('bogus', self.Device())])
+    self.inv._devices = {
+        'device_a': self.Device(), 'device_b': self.Device(),
+        'device_c': self.Device(), 'bogus': self.Device()}
 
     # Null command with no targets.
     self.assertEqual('XTargets: ',

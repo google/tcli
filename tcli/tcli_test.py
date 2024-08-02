@@ -180,23 +180,23 @@ class UnitTestTCLI(unittest.TestCase):
   def testCopy(self):
     # TODO(harro): Tests for extended commands?
     self.tcli_obj.buffers.Append('label', 'content')
-    self.tcli_obj.record = None
-    self.tcli_obj.inline_tcli = copy.copy(self.tcli_obj)
+    self.tcli_obj.record = ''
+    inline_tcli = copy.copy(self.tcli_obj)
     self.assertEqual('content', self.tcli_obj.buffers.GetBuffer('label'))
     self.assertFalse(self.tcli_obj.record)
     # Change parent.
     self.tcli_obj.buffers.Append('label', 'more')
     self.tcli_obj.record = 'label'
-    # Change child.
-    self.tcli_obj.inline_tcli.record = 'anotherlabel'
+    # Change copy.
+    inline_tcli.record = 'anotherlabel'
 
     # Test the parent.
     self.assertEqual('content\nmore', self.tcli_obj.buffers.GetBuffer('label'))
     self.assertEqual('label', self.tcli_obj.record)
     # Test the child.
     self.assertEqual('content\nmore',
-                     self.tcli_obj.inline_tcli.buffers.GetBuffer('label'))
-    self.assertEqual('anotherlabel', self.tcli_obj.inline_tcli.record)
+                     inline_tcli.buffers.GetBuffer('label'))
+    self.assertEqual('anotherlabel', inline_tcli.record)
 
   def testSetDefaults(self):
     """Tests setup of default commands from Flags."""
@@ -362,8 +362,8 @@ class UnitTestTCLI(unittest.TestCase):
 
     self.tcli_obj.display = 'raw'
     self.tcli_obj.inventory._devices = {
-        'device_1': collections.OrderedDict([('Vendor', 'Asterix')]),
-        'device_2': collections.OrderedDict([('Vendor', 'Asterix')]),
+        'device_1': {'Vendor', 'Asterix'},
+        'device_2': {'Vendor', 'Asterix'},
     }
 
     # Raw headers.

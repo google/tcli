@@ -114,7 +114,7 @@ class UnitTestCSVInventory(unittest.TestCase):
   def testFetchDevices(self):
     """Tests directly loading device inventory from CSV file."""
     self.inv._FetchDevices()
-    devices = self.inv.devices.keys()
+    devices = self.inv.devices
     self.assertCountEqual(['device_a', 'device_b', 'device_c'], devices)
 
   def testDeviceList(self):
@@ -154,8 +154,7 @@ class UnitTestCSVInventory(unittest.TestCase):
     self.inv._devices = {
         'abc': dev_attr(pop='abc'),
         'xyz': dev_attr(pop='xyz'),
-        'bogus': dev_attr(pop='')
-        }
+        'bogus': dev_attr(pop='')}
     # Defaults
     self.assertEqual('Pop: ', self.inv._CmdFilter('pop', []))
     self.assertEqual('XPop: ', self.inv._CmdFilter('xpop', []))
@@ -221,9 +220,9 @@ class UnitTestCSVInventory(unittest.TestCase):
     d2 = Device(vendor='cisco', realm='prod', pop='xyz01', flags=[])
     d3 = Device(vendor='juniper', realm='lab', pop='abc01', flags=[])
     d4 = Device(vendor='juniper', realm='lab', pop='abc02', flags=[])
-    self.inv._devices = collections.OrderedDict([
-        ('device01', d1), ('device02', d2),
-        ('device03', d3), ('device04', d4)])
+    self.inv._devices = {
+        'device01': d1, 'device02': d2,
+        'device03': d3, 'device04': d4}
     self.inv._filters['targets'] = ''
     self.inv._filters['realm'] = ''
     self.inv._filters['vendor'] = ''
