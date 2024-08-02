@@ -342,18 +342,18 @@ class TCLI(object):
     self.safemode = False
     self.verbose = False
     # Attributes with defaults set by flags.
-    self.color = None
+    self.color = True
     self.color_scheme = None
     self.display = None
     self.filter = None
-    self.linewrap = None
+    self.linewrap = False
     self.mode = None
     self.timeout = None
     # Buffers
-    self.log = None
-    self.logall = None
-    self.record = None
-    self.recordall = None
+    self.log = ''
+    self.logall = ''
+    self.record = ''
+    self.recordall = ''
     # Display values.
     self.system_color = ''
     self.title_color = ''

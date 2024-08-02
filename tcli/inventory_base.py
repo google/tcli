@@ -28,6 +28,7 @@ source specific support.
 import collections
 import re
 import threading
+import typing
 from absl import flags
 from absl import logging
 
@@ -152,9 +153,9 @@ class Inventory(object):
     def __init__(self):
       Inventory.Request.UID += 1
       self.uid = Inventory.Request.UID
-      self.target = None
-      self.command = None
-      self.mode = None
+      self.target = ''
+      self.command = ''
+      self.mode = ''
 
   def __init__(self, batch=False):
     """Initialise thread safe access to data to support async calls."""
@@ -164,7 +165,7 @@ class Inventory(object):
     # Each value is a dictionary of attribute/value pairs.
     # If we have already loaded the devices, don't do it again.
     if not hasattr(self, '_devices'):
-      self._devices = None
+      self._devices = {}
     # List of device names.
     self._device_list = None
     # Filters and exclusions added by this library.
@@ -367,7 +368,7 @@ class Inventory(object):
     if word == ' ':
       word = ''
     completer_list = []
-    for attrib in self.ATTRIBUTES:
+    for attrib in DEVICE_ATTRIBUTES:
       if attrib.startswith(word):
         completer_list.append(attrib)
     completer_list.sort()
@@ -571,7 +572,7 @@ class Inventory(object):
               re_match.append(re.compile(filter_item, re.IGNORECASE))
             else:
               re_match.append(re.compile(filter_item))
-          except sre_constants.error:
+          except re.error:
             raise ValueError('Argument regexp %r is invalid' % filter_item)
         else:
           if ignore_case:
@@ -614,7 +615,7 @@ class Inventory(object):
   # Methods related to managing and serving the device inventory.            #
   ############################################################################
 
-  def _GetDevices(self):
+  def _GetDevices(self) -> dict[str, typing.Tuple]:
     """Returns a dict of Device objects. Blocks until devices have loaded."""
 
     if self.batch and not self._devices:
@@ -629,7 +630,7 @@ class Inventory(object):
           'Device inventory data failed to load or no devices found.')
     return self._devices
 
-  def _GetDeviceList(self):
+  def _GetDeviceList(self) -> list[str]:
     """Returns a list of Device name."""
 
     # A value of 'None' means the list needs to be built first.
