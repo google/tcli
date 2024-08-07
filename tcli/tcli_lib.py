@@ -417,7 +417,7 @@ class TCLI(object):
 
     # Commands that may be specified in flags.
     # pylint: disable=protected-access
-    for filter_name in self.inventory._filters:
+    for filter_name in self.inventory._inclusions:
       try:
         self.cli_parser.ExecWithDefault(filter_name)
       except ValueError:

@@ -23,7 +23,7 @@ from tcli import inventory_base
 
 class InventoryBaseTest(unittest.TestCase):
 
-  # pylint: disable=invalid-name
+  # Devices in this testing inventory will have a device name but without any attributes.
   Device = collections.namedtuple('Device', ())
 
   @classmethod
@@ -42,13 +42,21 @@ class InventoryBaseTest(unittest.TestCase):
   def testChangeFilter(self):
     """Tests changing the targets filters."""
 
+    # Test case scaffolding.
     self.inv._GetDevices = mock.Mock(
         return_value={'abc': self.Device(), 'xyz': self.Device()})
 
     # '^' clears targets.
     self.inv._device_list = ['something']
-    self.inv._filters['targets'] = 'something'
+    self.inv._inclusions['targets'] = 'something'
     self.assertEqual('', self.inv._ChangeFilter('targets', '^'))
+    self.assertIsNone(self.inv._literals_filter['targets'])
+    self.assertIsNone(self.inv._compiled_filter['targets'])
+  
+    # '^$' clears targets.
+    self.inv._device_list = ['something']
+    self.inv._inclusions['targets'] = 'something'
+    self.assertEqual('', self.inv._ChangeFilter('targets', '^$'))
     self.assertIsNone(self.inv._literals_filter['targets'])
     self.assertIsNone(self.inv._compiled_filter['targets'])
 
@@ -63,11 +71,11 @@ class InventoryBaseTest(unittest.TestCase):
                      [x.pattern for x in self.inv._compiled_filter['xtargets']])
 
     # Generate a ValueError.
-    self.inv._filters['targets'] = 'something'
+    self.inv._inclusions['targets'] = 'something'
     self.assertRaises(
         ValueError,
         self.inv._ChangeFilter, 'targets', 'bogus')
-    self.assertEqual('something', self.inv._filters['targets'])
+    self.assertEqual('something', self.inv._inclusions['targets'])
 
   def testDecomposeFilter(self):
     """Test deriving the compiled/literal filters from the string."""
@@ -101,51 +109,10 @@ class InventoryBaseTest(unittest.TestCase):
     self.assertEqual('pear', self.inv._CmdFilterCompleter(['p'], 0))
     self.assertIsNone(self.inv._CmdFilterCompleter(['p', 'bogus'], 0))
 
-  def testCmdFilter(self):
-    """Tests that command handler sets the string value of the filters."""
-
-    self.inv._devices = {
-        'abc': self.Device(),
-        'xyz': self.Device(),
-        'bogus': self.Device()
-    }
-    # Defaults
-    self.assertEqual('Targets: ', self.inv._CmdFilter('targets', []))
-    self.assertEqual('XTargets: ', self.inv._CmdFilter('xtargets', []))
-
-    # New values
-    self.inv._CmdFilter('targets', ['abc'])
-    self.assertEqual('abc', self.inv._filters['targets'])
-    self.inv._CmdFilter('targets', ['xyz'], append=True)
-    self.assertEqual('abc,xyz', self.inv._filters['targets'])
-    # Prepend with an 'x' to update the exclusions.
-    self.inv._CmdFilter('xtargets', ['abc'])
-    self.assertEqual('abc', self.inv._exclusions['xtargets'])
-    self.assertRaises(ValueError, self.inv._CmdFilter, 'bogus', [])
-
-  def testCmdFilter2(self):
-    """Tests setting filter via attributes command."""
-
-    self.inv._devices = {
-        'abc': self.Device(),
-        'xyz': self.Device(),
-        'bogus': self.Device()
-    }
-    # New values
-    self.inv._CmdFilter('attributes', ['targets', 'abc'])
-    self.assertEqual('abc', self.inv._filters['targets'])
-    self.inv._CmdFilter('attributes', ['targets', 'xyz'], append=True)
-    self.assertEqual('abc,xyz', self.inv._filters['targets'])
-    # Prepend with an 'x' to update the exclusions.
-    self.assertEqual('XTargets: ', self.inv._CmdFilter('xtargets', []))
-    self.inv._CmdFilter('xattributes', ['targets', 'abc'])
-    self.assertEqual('abc', self.inv._exclusions['xtargets'])
-    self.assertRaises(ValueError, self.inv._CmdFilter, 'attributes', ['bogus'])
-
   def testShowEnv(self):
     """Tests basic display of running environment."""
 
-    self.inv._filters = {'targets': ''}
+    self.inv._inclusions = {'targets': ''}
     self.inv._exclusions = {'xtargets': ''}
     self.assertEqual(
         'Inventory:\n'
@@ -184,7 +151,7 @@ class InventoryBaseTest(unittest.TestCase):
     """Tests inclusion logic for filters."""
 
     dev_attr = collections.namedtuple('dev_attr', ['a', 'b', 'c'])
-    self.inv._filters = {'a': 'alpha', 'b': 'beta', 'c': ''}
+    self.inv._inclusions = {'a': 'alpha', 'b': 'beta', 'c': ''}
     with mock.patch.object(self.inv, '_Match', return_value=True) as mock_match:
       self.inv._Included('device_a', dev_attr(a='alpha', b='beta', c='charlie'))
       # Compares a Match for each non-blank filter.
@@ -198,7 +165,7 @@ class InventoryBaseTest(unittest.TestCase):
     self.assertFalse(self.inv._Included('device_a', dev_attr2(a='alpha')))
 
     # devicename attribute is checked against the targets.
-    self.inv._filters = {'targets': 'abc'}
+    self.inv._inclusions = {'targets': 'abc'}
     with mock.patch.object(self.inv, '_Match') as mock_match:
       self.inv._Included('device_a', dev_attr(a='alpha', b='beta', c='charlie'))
       # 'Targets' attribute matched to device name.
@@ -265,84 +232,125 @@ class InventoryBaseTest(unittest.TestCase):
     self.assertRaises(ValueError, self.inv._BuildDeviceList)
 
   def testTargets(self):
-    """Tests setting targets value and resultant device lists."""
+    """Tests setting the targets and the resultant device lists."""
 
+    # Test targets are four devices - device_a|b|c and 'bogus'.
     self.inv._devices = {
         'device_a': self.Device(), 'device_b': self.Device(),
         'device_c': self.Device(), 'bogus': self.Device()}
 
-    # Null command with no targets.
+    # Initial state, confirm there no targets or excluded targets.
     self.assertEqual('Targets: ', self.inv._CmdFilter('targets', []))
     self.assertEqual('XTargets: ', self.inv._CmdFilter('xtargets', []))
 
-    # Single host.
+    # A single device as target.
     self.inv._CmdFilter('targets', ['device_c'])
-    self.assertEqual(['device_c'], self.inv.device_list)
-    # Nonexistant host - rejected.
-    self.assertRaises(ValueError, self.inv._CmdFilter,
-                      'targets', ['nonexistant'])
+    self.assertEqual('device_c', self.inv._inclusions['targets'])
     self.assertEqual(['device_c'], self.inv.device_list)
 
-    # Multiple hosts.
+    # Nonexistant device - rejected. Retains existing targets.
+    self.assertRaises(
+      ValueError, self.inv._CmdFilter, 'targets', ['nonexistant'])
+    self.assertEqual(['device_c'], self.inv.device_list)
+
+    # Two devices as targets. Filer is unordered but device_list is.
     self.inv._CmdFilter('targets', ['device_c,device_a'])
+    self.assertEqual('device_c,device_a', self.inv._inclusions['targets'])
     self.assertEqual(['device_a', 'device_c'], self.inv.device_list)
 
-    # Build target with incremental suffix addition.
-    self.inv._CmdFilter('targets', ['device_c'])
-    self.inv._CmdFilter('targets', ['device_a'], True)
-    self.assertEqual(['device_a', 'device_c'], self.inv.device_list)
+    # Appending additional target.
+    self.inv._CmdFilter('targets', ['device_b'], True)
+    self.assertEqual('device_c,device_a,device_b', self.inv._inclusions['targets'])
+    self.assertEqual(['device_a', 'device_b', 'device_c'], self.inv.device_list)
 
+    # Clear targets then append two targets to a blank target list.
     self.inv._CmdFilter('targets', ['^'])
+    self.assertEqual('', self.inv._inclusions['targets'])
     self.inv._CmdFilter('targets', ['device_c,device_a'], True)
+    self.assertEqual('device_c,device_a', self.inv._inclusions['targets'])
     self.assertEqual(['device_a', 'device_c'], self.inv.device_list)
 
-    # Null command with targets.
+    # Blank targets command leaves existing targets in place and returns it.
     self.assertEqual('Targets: device_c,device_a',
                      self.inv._CmdFilter('targets', []))
 
-    # Clean targets.
-    # Unlike other filters, blank targets is not a match.
+    # Target list is cleared with '^' argument.
     self.inv._CmdFilter('targets', ['^'])
-    self.assertEqual(self.inv.device_list, [])
-    self.inv._CmdFilter('targets', ['^$'])
+    self.assertEqual('', self.inv._inclusions['targets'])
     self.assertEqual(self.inv.device_list, [])
 
   def testXtargets(self):
-    """Tests exclusions filters for targets adn resultant device lists."""
+    """Tests setting exclusions for the device targets."""
 
+    # Test targets are four devices - device_a|b|c and 'bogus'.
     self.inv._devices = {
         'device_a': self.Device(), 'device_b': self.Device(),
         'device_c': self.Device(), 'bogus': self.Device()}
 
-    # Null command with no targets.
+    # Initial state, confirm there no excluded targets.
     self.assertEqual('XTargets: ',
                      self.inv._CmdFilter('xtargets', []))
 
-    # Single host.
+    # A single device as target.
     self.inv._CmdFilter('targets', ['device_c'])
+
+    # Single target with disjoint exclusion.
     self.inv._CmdFilter('xtargets', ['device_a'])
     self.assertEqual(['device_c'], self.inv.device_list)
+
+    # Single target with identical exclusion.
     self.inv._CmdFilter('xtargets', ['device_c'])
     self.assertEqual([], self.inv.device_list)
 
-    # Exclusion list cleared.
-    self.inv._CmdFilter('targets', ['device_c'])
+    # Exclusion list is cleared with '^' argument.
     self.inv._CmdFilter('xtargets', ['^'])
     self.assertEqual(['device_c'], self.inv.device_list)
 
-    # Exclude all.
+    # Two devices as targets.
     self.inv._CmdFilter('targets', ['device_c,device_a'])
+
+    # Exclude all targets with wildcard matching.
     self.inv._CmdFilter('xtargets', ['^.*'])
     self.assertEqual([], self.inv.device_list)
 
-    # Exclude partial.
-    self.inv._CmdFilter('targets', ['device_c,device_a'])
+    # Exclude one target with a partial match.
     self.inv._CmdFilter('xtargets', ['^.*_c'])
     self.assertEqual(['device_a'], self.inv.device_list)
 
-    # Inrementally add suffix to exclude the last one.
+    # Append new exclusion rule to exclude the second target.
     self.inv._CmdFilter('xtargets', ['^.*_a'], True)
     self.assertEqual([], self.inv.device_list)
+
+  def testAttributeFilter(self):
+    """Tests setting filter via generic attributes command."""
+
+    # Test case scaffolding.
+    # TODO(harro): Why is clearing the inclusions & exclusions necessary?
+    self.inv._inclusions = {'targets': ''}
+    self.inv._exclusions = {'xtargets': ''}
+    # Test targets are four devices - device_a|b|c and 'bogus'.
+    self.inv._devices = {
+        'device_a': self.Device(), 'device_b': self.Device(),
+        'device_c': self.Device(), 'bogus': self.Device()}
+
+    # New values
+    self.inv._AttributeFilter('attributes', ['targets', 'device_a'])
+    self.assertEqual('device_a', self.inv._inclusions['targets'])
+
+    self.inv._AttributeFilter('attributes', ['targets', 'device_c'], append=True)
+    self.assertEqual('device_a,device_c', self.inv._inclusions['targets'])
+
+    # Prepend with an 'x' to update the exclusions.
+    self.inv._AttributeFilter('xattributes', ['targets', 'device_a'])
+    self.assertEqual('device_a', self.inv._exclusions['xtargets'])
+
+    # Raises an error if attribute unknown.
+    self.assertRaises(ValueError, self.inv._AttributeFilter, 'attributes', ['nonAttr', 'some value'])
+
+    # Show all attributes and the current values if no argument supplied.
+    self.assertEqual({'targets': 'device_a,device_c'}, self.inv._inclusions)
+    self.assertEqual('Targets: device_a,device_c', self.inv._AttributeFilter('attributes', []))
+    self.assertEqual('XTargets: device_a', self.inv._AttributeFilter('xattributes', []))
 
 
 if __name__ == '__main__':

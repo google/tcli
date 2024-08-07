@@ -43,7 +43,7 @@ class UnitTestCSVInventory(unittest.TestCase):
     inventory.FLAGS.realm = 'lab'
     with mock.patch.object(inventory.Inventory, 'LoadDevices'):
       self.inv = inventory.Inventory()
-    self.inv._filters['targets'] = ''
+    self.inv._inclusions['targets'] = ''
     self.inv._exclusions['xtargets'] = ''
 
   def testParseDevicesFromCsv(self):
@@ -162,9 +162,9 @@ class UnitTestCSVInventory(unittest.TestCase):
 
     # New values
     self.inv._CmdFilter('pop', ['abc'])
-    self.assertEqual('abc', self.inv._filters['pop'])
+    self.assertEqual('abc', self.inv._inclusions['pop'])
     self.inv._CmdFilter('pop', ['xyz'], append=True)
-    self.assertEqual('abc,xyz', self.inv._filters['pop'])
+    self.assertEqual('abc,xyz', self.inv._inclusions['pop'])
     # Prepend with an 'x' to update the exclusions.
     self.inv._CmdFilter('xpop', ['abc'])
     self.assertEqual('abc', self.inv._exclusions['xpop'])
@@ -192,10 +192,10 @@ class UnitTestCSVInventory(unittest.TestCase):
     # New values
     # Changing realm or vendor updates the appropriate filter.
     self.inv._CmdFilter('realm', ['lab'], False)
-    self.assertEqual('lab', self.inv._filters['realm'])
+    self.assertEqual('lab', self.inv._inclusions['realm'])
     self.assertEqual(['lab'], self.inv._literals_filter['realm'])
     self.inv._CmdFilter('vendor', ['juniper'], False)
-    self.assertEqual('juniper', self.inv._filters['vendor'])
+    self.assertEqual('juniper', self.inv._inclusions['vendor'])
     self.assertEqual(['juniper'], self.inv._literals_filter['vendor'])
     # prepend with an 'x' to update the exclusions.
     self.inv._CmdFilter('xvendor', ['cisco'], False)
@@ -224,9 +224,9 @@ class UnitTestCSVInventory(unittest.TestCase):
     self.inv._devices = {
         'device01': d1, 'device02': d2,
         'device03': d3, 'device04': d4}
-    self.inv._filters['targets'] = ''
-    self.inv._filters['realm'] = ''
-    self.inv._filters['vendor'] = ''
+    self.inv._inclusions['targets'] = ''
+    self.inv._inclusions['realm'] = ''
+    self.inv._inclusions['vendor'] = ''
 
     # Realm filter / unfilter.
     self.inv._CmdFilter('targets', ['^device0.'])
@@ -239,7 +239,7 @@ class UnitTestCSVInventory(unittest.TestCase):
     self.assertRaises(ValueError, self.inv._CmdFilter, 'realm', ['bogus'])
     self.assertEqual(['device03', 'device04'], self.inv.device_list)
 
-    self.inv._filters['realm'] = ''
+    self.inv._inclusions['realm'] = ''
     # Vendor filter / unfilter.
     self.inv._CmdFilter('vendor', ['cisco'])
     self.assertEqual(['device02'], self.inv.device_list)

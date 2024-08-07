@@ -169,7 +169,7 @@ class Inventory(object):
     # List of device names.
     self._device_list = None
     # Filters and exclusions added by this library.
-    self._filters = {'targets': ''}
+    self._inclusions = {'targets': ''}
     self._exclusions = {'xtargets': ''}
     # Store literal strings and compiled regexps in dedicated dictionary
     # Use to accelerate matching against devices when buidling device_list
@@ -187,7 +187,7 @@ class Inventory(object):
       if attr == 'flags':
         # TODO(harro): Add support for filtering on flag values.
         continue
-      self._filters[attr] = ''
+      self._inclusions[attr] = ''
       self._exclusions['x' + attr] = ''
 
     if not batch:
@@ -282,8 +282,9 @@ class Inventory(object):
     cmd_register.RegisterCommand('attributes', TILDE_COMMAND_HELP['attributes'],
                                  max_args=2, append=True, regexp=True,
                                  inline=True, short_name='A',
-                                 handler=self._CmdFilter,
-                                 completer=self._CmdFilterCompleter)
+                                 handler=self._AttributeFilter,
+                                 # TODO(harro): Change completer.
+                                 completer=self._CmdFilterCompleter) 
     cmd_register.RegisterCommand('targets', TILDE_COMMAND_HELP['targets'],
                                  append=True, regexp=True, inline=True,
                                  short_name='T', default_value=FLAGS.targets,
@@ -295,7 +296,8 @@ class Inventory(object):
                                  TILDE_COMMAND_HELP['xattributes'],
                                  max_args=2, append=True, regexp=True,
                                  inline=True, short_name='E',
-                                 handler=self._CmdFilter,
+                                 handler=self._AttributeFilter,
+                                 # TODO(harro): Change completer.
                                  completer=self._CmdFilterCompleter)
     cmd_register.RegisterCommand('xtargets', TILDE_COMMAND_HELP['xtargets'],
                                  append=True, regexp=True, inline=True,
@@ -347,7 +349,7 @@ class Inventory(object):
   # Returns a sorted list targets.
   device_list = property(GetDeviceList)
   # pylint: disable=protected-access
-  targets = property(lambda self: self._filters['targets'])
+  targets = property(lambda self: self._inclusions['targets'])
 
   ############################################################################
   # Methods related to registering/executing TCLI CLI command extensions.    #
@@ -378,53 +380,77 @@ class Inventory(object):
     else:
       return None
 
-  def _CmdFilter(self, command_name, args, append=False):
-    """Updates or displays inventory filter.
+  def _CmdFilter(self, command_name: str, args: list[str], append=False) -> str:
+    """Updates or displays target device inventory filter.
 
     Args:
-      command_name: str command name entered by user (minus tilde prefix).
-      args: list of positional args.
-      append: bool indicating that command had a suffix to append data.
+      command_name: Command entered by the user (minus tilde prefix).
+      args: list of positional args after the command.
+      append: bool indicating that filters args are to be appended.
     Returns:
-      None or String to display.
+      String to display.
     Raises:
       ValueError: If called on unknown attribute.
     """
 
-    if command_name in ('attributes', 'xattributes'):
-      if not args:
-        # Display value of all filters.
-        if command_name == 'attributes':
-          for attr in self._filters:
-            self._CmdFilter(attr, [], append)
-        else:
-          for attr in self._exclusions:
-            self._CmdFilter(attr, [], append)
-      else:
-        if command_name == 'attributes':
-          self._CmdFilter(args[0], args[1 :], append)
-        else:
-          # 'xattributes' so add 'x' prefix to attribute.
-          self._CmdFilter('x' + args[0], args[1 :], append)
-      return
+    if not (command_name in self._inclusions or 
+            command_name in self._exclusions):
+      raise ValueError('Command "%s" invalid.' % command_name)
 
     # Filter may be inclusive, or exclusive.
-    if command_name in self._filters:
-      filter_value = self._filters
+    if command_name in self._inclusions:
+      filters = self._inclusions
+      # Do we want to captialise the first one or two characters.
       caps = 1
-    elif command_name in self._exclusions:
-      filter_value = self._exclusions
-      caps = 2
     else:
-      raise ValueError('Device attribute "%s" invalid.' % command_name)
+      filters = self._exclusions
+      caps = 2
 
     if not args:
       return self._FormatLabelAndValue(
-          command_name, filter_value[command_name], caps=caps)
-    filter_string = args[0]
-    if append and filter_string and filter_value[command_name]:
-      filter_string = ','.join([filter_value[command_name], filter_string])
-    filter_value[command_name] = self._ChangeFilter(command_name, filter_string)
+          command_name, filters[command_name], caps=caps)
+
+    filter_string = args[0]   # TDOD(harro): Raise exception is args >1 ?
+    # Appending a new filter string to an existing filter.
+    if append and filter_string and filters[command_name]:
+      filter_string = ','.join([filters[command_name], filter_string])
+
+    filters[command_name] = self._ChangeFilter(command_name, filter_string)
+    return ''
+
+  def _AttributeFilter(self, command_name: str, args: list[str], append=False) -> str:
+    """Displays the inventory inclusions or exclusions (filters).
+
+    Args:
+      command_name: 'attributes' or 'xattributes'.
+      args: list of positional args.
+    Returns:
+      String to display.
+    Raises:
+      ValueError: If called on unknown attribute.
+    """
+
+    if command_name not in ('attributes', 'xattributes'):
+      raise ValueError('Command "%s" invalid.' % command_name)
+
+    if args:
+      # Update attribute filter/s.
+      if command_name == 'attributes':
+        self._CmdFilter(args[0], args[1 :], append)
+      else:
+        # 'xattributes' so add 'x' prefix to corresponding attribute.
+        self._CmdFilter('x' + args[0], args[1 :], append)
+      return ''
+
+    # Display values of all device attribute filters.
+    result = ''
+    if command_name == 'attributes':
+      attr_list = self._inclusions
+    else: # xattributes
+      attr_list = self._exclusions
+    for attr in attr_list:
+      result += self._CmdFilter(attr, [], append)
+    return result
 
   def _CmdMaxTargets(self, command_name, args, append=False):
     """Updates or displays maxtargets filter.
@@ -478,7 +504,7 @@ class Inventory(object):
     """
 
     # Clearing a filter requires no content validation.
-    if not arg or arg == '^':
+    if not arg or arg in ('^', '^$'):
       arg = ''
       (literals, compiled) = (None, None)
     else:
@@ -602,11 +628,11 @@ class Inventory(object):
     # Increase indent.
     indent += '  '
     # TODO(harro): Will break a filter doesn't have corresponding exclusion.
-    for f, x in zip(sorted(self._filters), sorted(self._exclusions)):
+    for f, x in zip(sorted(self._inclusions), sorted(self._exclusions)):
       # Create paired entries like 'Targets: ..., XTargets: ...'
       display_string.append('%s%s, %s' % (
           indent,
-          self._FormatLabelAndValue(f, self._filters[f]),
+          self._FormatLabelAndValue(f, self._inclusions[f]),
           self._FormatLabelAndValue(x, self._exclusions[x], caps=2)))
 
     return '\n'.join(display_string)
@@ -665,9 +691,9 @@ class Inventory(object):
   def _Included(self, devicename, device_attrs):
     """Returns true if device matches all filters for inclusion."""
 
-    for attr in self._filters:
+    for attr in self._inclusions:
       # Blank filters are ignored.
-      if not self._filters[attr]:
+      if not self._inclusions[attr]:
         continue
       # For targets we match on device name.
       if attr == 'targets':
@@ -698,7 +724,7 @@ class Inventory(object):
 
     self._device_list = []
     # Special case, null targets doesn't match any devices.
-    if not self._filters['targets']:
+    if not self._inclusions['targets']:
       return self._device_list
 
     device_list = []

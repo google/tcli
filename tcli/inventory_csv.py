@@ -149,7 +149,7 @@ class Inventory(inventory_base.Inventory):
     #
     # So we built an ordered dict of NamedTuples (python 3.6)
     # We enforce 'device' as the header of the first column and 'flags' as
-    # the header of an optional list in the last column.
+    # the header of an optional list as the last column.
 
     # Read in the header line which we will use to name the fields.
     line = buf.readline()
