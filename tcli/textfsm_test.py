@@ -14,9 +14,9 @@
 
 """Unittest for textfsm module."""
 
+import unittest
 from io import StringIO    # pylint: disable=g-importing-member
 from absl import flags
-from absl.testing import absltest as unittest
 from tcli.tcli_textfsm import textfsm
 
 

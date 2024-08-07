@@ -16,9 +16,10 @@
 
 import importlib
 import os
+import unittest
 from absl import flags
-from absl.testing import absltest as unittest
-import mock
+from unittest import mock
+
 from tcli import tcli_lib as tcli
 
 
@@ -106,7 +107,7 @@ class UnitTestTCLIEndToEnd(unittest.TestCase):
           mock.call(OUTPUT_B)])
 
     # RC script ignored.
-    self.assertIsNone(gcl_obj.log)
+    self.assertEqual(gcl_obj.log, '')
 
 
 if __name__ == '__main__':

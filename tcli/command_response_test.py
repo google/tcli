@@ -14,8 +14,9 @@
 
 """Tests for tcli.command_response."""
 
-from absl.testing import absltest as unittest
-import mock
+import unittest
+from unittest import mock
+
 from tcli import command_response
 
 

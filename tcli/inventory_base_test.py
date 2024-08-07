@@ -15,8 +15,9 @@
 
 import collections
 import re
-from absl.testing import absltest as unittest
-import mock
+import unittest
+from unittest import mock
+
 from tcli import inventory_base
 
 
@@ -34,6 +35,9 @@ class InventoryBaseTest(unittest.TestCase):
     super(InventoryBaseTest, self).setUp()
     with mock.patch.object(inventory_base.Inventory, 'LoadDevices'):
       self.inv = inventory_base.Inventory(batch=False)
+
+  def tearDown(self):
+    inventory_base.DEVICE_ATTRIBUTES = {}
 
   def testChangeFilter(self):
     """Tests changing the targets filters."""

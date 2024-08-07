@@ -46,9 +46,7 @@ setup(
         'License :: OSI Approved :: Apache Software License',
         'Operating System :: OS Independent',
         'Programming Language :: Python :: 3'],
-    requires=['absl', 'mock', 'textfsm', 'tqdm'],
+    requires=['absl', 'textfsm', 'tqdm'],
     packages=['tcli'],
     include_package_data=True,
-    setup_requires=['pytest-runner'],
-    tests_require=['pytest'],
     )

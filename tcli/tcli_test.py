@@ -1227,7 +1227,7 @@ class UnitTestTCLI(unittest.TestCase):
       self.tcli_obj.TildeCmd('play boo')
       mock_warning.assert_called_once_with(
           "Buffer: boo, already open by 'play' command.")
-      self.assertIsNone(self.tcli_obj.recordall)
+      self.assertEqual(self.tcli_obj.recordall, '')
 
   def testTildeBufferRecursivePlay3(self):
     """Cannot play from a buffer that is being recorded to."""
