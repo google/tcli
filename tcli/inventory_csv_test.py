@@ -15,9 +15,10 @@
 """Tests for tcli.inventory_csv."""
 
 import collections
+import unittest
 from io import StringIO    # pylint: disable=g-importing-member
-from absl.testing import absltest as unittest
-import mock
+from unittest import mock
+
 from tcli import inventory_csv as inventory
 
 

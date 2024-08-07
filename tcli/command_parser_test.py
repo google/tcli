@@ -14,7 +14,7 @@
 
 """Tests for tcli.command_parser."""
 
-from absl.testing import absltest as unittest
+import unittest
 from tcli import command_parser
 
 
