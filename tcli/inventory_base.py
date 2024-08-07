@@ -451,8 +451,6 @@ class Inventory(object):
     for attr in attr_list:
       result += self._CmdFilter(attr, [], append)
     return result
-    
-
 
   def _CmdMaxTargets(self, command_name, args, append=False):
     """Updates or displays maxtargets filter.
