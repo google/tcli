@@ -23,7 +23,7 @@ from tcli import inventory_base
 
 class InventoryBaseTest(unittest.TestCase):
 
-  # pylint: disable=invalid-name
+  # Devices in this testing inventory will have a device name but without any attributes.
   Device = collections.namedtuple('Device', ())
 
   @classmethod
@@ -308,39 +308,44 @@ class InventoryBaseTest(unittest.TestCase):
     self.assertEqual(self.inv.device_list, [])
 
   def testXtargets(self):
-    """Tests exclusions filters for targets adn resultant device lists."""
+    """Tests setting exclusions for the device targets."""
 
+    # Test targets are four devices - device_a|b|c and 'bogus'.
     self.inv._devices = {
         'device_a': self.Device(), 'device_b': self.Device(),
         'device_c': self.Device(), 'bogus': self.Device()}
 
-    # Null command with no targets.
+    # Initial state, confirm there no excluded targets.
     self.assertEqual('XTargets: ',
                      self.inv._CmdFilter('xtargets', []))
 
-    # Single host.
+    # A single device as target.
     self.inv._CmdFilter('targets', ['device_c'])
+
+    # Single target with disjoint exclusion.
     self.inv._CmdFilter('xtargets', ['device_a'])
     self.assertEqual(['device_c'], self.inv.device_list)
+
+    # Single target with identical exclusion.
     self.inv._CmdFilter('xtargets', ['device_c'])
     self.assertEqual([], self.inv.device_list)
 
-    # Exclusion list cleared.
-    self.inv._CmdFilter('targets', ['device_c'])
+    # Exclusion list is cleared with '^' argument.
     self.inv._CmdFilter('xtargets', ['^'])
     self.assertEqual(['device_c'], self.inv.device_list)
 
-    # Exclude all.
+    # Two devices as targets.
     self.inv._CmdFilter('targets', ['device_c,device_a'])
+
+    # Exclude all targets with wildcard matching.
     self.inv._CmdFilter('xtargets', ['^.*'])
     self.assertEqual([], self.inv.device_list)
 
-    # Exclude partial.
-    self.inv._CmdFilter('targets', ['device_c,device_a'])
+    # Exclude one target with a partial match.
     self.inv._CmdFilter('xtargets', ['^.*_c'])
     self.assertEqual(['device_a'], self.inv.device_list)
 
-    # Inrementally add suffix to exclude the last one.
+    # Append new exclusion rule to exclude the second target.
     self.inv._CmdFilter('xtargets', ['^.*_a'], True)
     self.assertEqual([], self.inv.device_list)
 
