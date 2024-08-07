@@ -267,43 +267,47 @@ class InventoryBaseTest(unittest.TestCase):
   def testTargets(self):
     """Tests setting targets value and resultant device lists."""
 
+    # Test targets are four devices - device_a|b|c and 'bogus'.
     self.inv._devices = {
         'device_a': self.Device(), 'device_b': self.Device(),
         'device_c': self.Device(), 'bogus': self.Device()}
 
-    # Null command with no targets.
+    # Initial state, confirm there no targets or excluded targets.
     self.assertEqual('Targets: ', self.inv._CmdFilter('targets', []))
     self.assertEqual('XTargets: ', self.inv._CmdFilter('xtargets', []))
 
-    # Single host.
+    # A single device as target.
     self.inv._CmdFilter('targets', ['device_c'])
     self.assertEqual(['device_c'], self.inv.device_list)
-    # Nonexistant host - rejected.
+
+    # Nonexistant host - rejected. Retains existing targets.
     self.assertRaises(ValueError, self.inv._CmdFilter,
                       'targets', ['nonexistant'])
     self.assertEqual(['device_c'], self.inv.device_list)
 
-    # Multiple hosts.
+    # Two devices as targets. Filer is unordered but device_list is.
     self.inv._CmdFilter('targets', ['device_c,device_a'])
     self.assertEqual(['device_a', 'device_c'], self.inv.device_list)
 
-    # Build target with incremental suffix addition.
-    self.inv._CmdFilter('targets', ['device_c'])
-    self.inv._CmdFilter('targets', ['device_a'], True)
-    self.assertEqual(['device_a', 'device_c'], self.inv.device_list)
+    # Appending additional target.
+    self.inv._CmdFilter('targets', ['device_b'], True)
+    self.assertEqual(['device_a', 'device_b', 'device_c'], self.inv.device_list)
 
+    # Clear targets then append two targets to a blank target list.
     self.inv._CmdFilter('targets', ['^'])
     self.inv._CmdFilter('targets', ['device_c,device_a'], True)
     self.assertEqual(['device_a', 'device_c'], self.inv.device_list)
 
-    # Null command with targets.
+    # Blank targets command leaves existing targets in place.
     self.assertEqual('Targets: device_c,device_a',
                      self.inv._CmdFilter('targets', []))
 
-    # Clean targets.
-    # Unlike other filters, blank targets is not a match.
+    # Target list is cleared with '^' argument.
     self.inv._CmdFilter('targets', ['^'])
     self.assertEqual(self.inv.device_list, [])
+
+   # Target list is cleared with '^$' argument.
+    self.inv._CmdFilter('targets', ['device_c'])
     self.inv._CmdFilter('targets', ['^$'])
     self.assertEqual(self.inv.device_list, [])
 
