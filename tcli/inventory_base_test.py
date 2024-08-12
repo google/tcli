@@ -121,55 +121,53 @@ class InventoryBaseTest(unittest.TestCase):
         '    Targets: , XTargets: ',
         self.inv._ShowEnv())
 
-  def testExcluded(self):
+  def testFilterMatch(self):
     """Tests exclusion logic for filters."""
 
+    # Fake device with three attributes.
     dev_attr = collections.namedtuple('dev_attr', ['a', 'b', 'c'])
+        # Devive name as the only exclusion.
+    self.inv._exclusions = {'xtargets': ''}
+    self.inv._literals_filter = {'xtargets': ''}
+
+    # Not excluded by default.
+    self.assertFalse(self.inv._FilterMatch(
+      'device_a', dev_attr(a=None, b=None, c=None), exclude=True))
+
+    # Devive name as the only exclusion.
+    self.inv._exclusions = {'xtargets': 'device_a'}
+    self.inv._literals_filter = {'xtargets': 'device_a'}
+
+    # Matches against device name rather than any other attribute.
+    self.assertTrue(self.inv._FilterMatch(
+      'device_a', dev_attr(a=None, b=None, c=None), exclude=True))
+  
+    # Attribute exclusions
     self.inv._exclusions = {'xa': 'alpha', 'xb': 'beta', 'xc': 'charlie'}
-    with mock.patch.object(self.inv, '_Match', return_value=True) as mock_match:
-      self.inv._Excluded('device_a', dev_attr(a='alpha', b='beta', c='charlie'))
-      # First match is all that is needed.
-      mock_match.assert_called_once_with('xa', 'alpha')
+    self.inv._literals_filter = {'xa': 'alpha', 'xb': 'beta', 'xc': 'charlie'}
 
-    with mock.patch.object(self.inv,
-                           '_Match', return_value=False) as mock_match:
-      # Missing non blank attribute 'xb' skipped over.
-      dev_attr2 = collections.namedtuple('dev_attr2', ['a'])
-      self.assertFalse(self.inv._Excluded(
-          'device_a', dev_attr2(a='nomatch')))
-      mock_match.assert_has_calls([
-          mock.call('xa', 'nomatch'),
-      ])
+    # Single literal match.
+    self.assertTrue(self.inv._FilterMatch(
+      'device_a', dev_attr(a='alpha', b=None, c=None), exclude=True))
+    
+    # Single literal at the end.
+    self.assertTrue(self.inv._FilterMatch(
+      'device_a', dev_attr(a='nomatch', b=None, c='charlie'), exclude=True))
+    
+    # Two literal matches.
+    self.inv._FilterMatch(
+        'device_a', dev_attr(a='alpha', b=None, c='charlie'), exclude=True
+        )
 
-    self.inv._exclusions = {'xtargets': 'abc'}
-    with mock.patch.object(self.inv, '_Match') as mock_match:
-      self.inv._Excluded('device_a', dev_attr(a='alpha', b='beta', c='charlie'))
-      # 'Targets' attribute matched to device name.
-      mock_match.assert_called_once_with('xtargets', 'device_a')
-
-  def testIncluded(self):
-    """Tests inclusion logic for filters."""
-
-    dev_attr = collections.namedtuple('dev_attr', ['a', 'b', 'c'])
-    self.inv._inclusions = {'a': 'alpha', 'b': 'beta', 'c': ''}
-    with mock.patch.object(self.inv, '_Match', return_value=True) as mock_match:
-      self.inv._Included('device_a', dev_attr(a='alpha', b='beta', c='charlie'))
-      # Compares a Match for each non-blank filter.
-      mock_match.assert_has_calls([
-          mock.call('a', 'alpha'),
-          mock.call('b', 'beta'),
-      ])
-
-    # Missing non blank attribute - False.
-    dev_attr2 = collections.namedtuple('dev_attr2', ['a'])
-    self.assertFalse(self.inv._Included('device_a', dev_attr2(a='alpha')))
-
-    # devicename attribute is checked against the targets.
-    self.inv._inclusions = {'targets': 'abc'}
-    with mock.patch.object(self.inv, '_Match') as mock_match:
-      self.inv._Included('device_a', dev_attr(a='alpha', b='beta', c='charlie'))
-      # 'Targets' attribute matched to device name.
-      mock_match.assert_called_once_with('targets', 'device_a')
+    # Attribute exclusions
+    self.inv._exclusions = {'xtargets': 'device_a',
+                            'xa': 'alpha', 'xb': 'beta', 'xc': 'charlie'}
+    self.inv._literals_filter = {'xtargets': 'device_a',
+                                 'xa': 'alpha', 'xb': 'beta', 'xc': 'charlie'}
+    
+    # Matches against device name as well as other attributes.
+    self.inv._FilterMatch(
+      'device_a', dev_attr(a='alpha', b='beta', c='charlie'), exclude=True)
 
   def testMatch(self):
     """Test applying the compiled and literal filters to attribute matching."""
@@ -193,19 +191,22 @@ class InventoryBaseTest(unittest.TestCase):
     self.assertTrue(self.inv._Match('fruit', [['grape'], ['orange', 'apple']]))
 
   def testBuildDeviceList(self):
-    """Tests building a device list from  device dictionary."""
+    """Tests building a device list from a device dictionary."""
 
     self.inv._devices = {
         'first': self.Device(),
         'second': self.Device(),
         'third': self.Device()
         }
+
+    # Multi part filter that matches all device names.
     self.inv._CmdFilter('targets', ['^f.*,second,^t.ird'])
     self.inv._CmdFilter('xtargets', [''])
     self.inv._device_list = None
     self.assertEqual(set(['first', 'second', 'third']),
                      set(self.inv.device_list))
 
+    # Fliter that matches only the first device.
     self.inv._CmdFilter('targets', ['^f.*'])
     self.inv._device_list = None
     self.assertEqual(['first'], self.inv.device_list)
@@ -248,12 +249,12 @@ class InventoryBaseTest(unittest.TestCase):
     self.assertEqual('device_c', self.inv._inclusions['targets'])
     self.assertEqual(['device_c'], self.inv.device_list)
 
-    # Nonexistant device - rejected. Retains existing targets.
+    # Non existant device - rejected. Retains existing targets.
     self.assertRaises(
       ValueError, self.inv._CmdFilter, 'targets', ['nonexistant'])
     self.assertEqual(['device_c'], self.inv.device_list)
 
-    # Two devices as targets. Filer is unordered but device_list is.
+    # Two devices as targets. Filter is unordered but device_list is.
     self.inv._CmdFilter('targets', ['device_c,device_a'])
     self.assertEqual('device_c,device_a', self.inv._inclusions['targets'])
     self.assertEqual(['device_a', 'device_c'], self.inv.device_list)
