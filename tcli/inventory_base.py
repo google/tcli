@@ -68,8 +68,16 @@ TILDE_COMMAND_HELP = {
     Shortname: 'X'.""",
 }
 
+# Maximum number of devices that can be the recipient of a command.
+# Can (and should) be overriden in the child module or the command line.
 DEFAULT_MAXTARGETS = 50
+# System default for what device targets to exclude form matching.
+# Set this to avoid overly matching on devices that may rarely be an
+# intentional target of commands (but you still want to be able to send
+# commands to them as the exception rather than the rule).
 DEFAULT_XTARGETS = ''
+# System wide set of device attributes that a device may have.
+# Usually populated by the child module that actually populates the inventory.
 DEVICE_ATTRIBUTES = {}
 
 FLAGS = flags.FLAGS
@@ -251,7 +259,7 @@ class Inventory(object):
     """
 
     with self._lock:
-      self._LoadDevices()
+      self._BuildDeviceData()
 
   def ReformatCmdResponse(self, response):
     """Formats command response into name value pairs in a dictionary.
@@ -435,6 +443,7 @@ class Inventory(object):
 
     if args:
       # Update attribute filter/s.
+      # TODO(harro): Can we set multiple attributes here by splitting the list?
       if command_name == 'attributes':
         self._CmdFilter(args[0], args[1 :], append)
       else:
@@ -452,7 +461,7 @@ class Inventory(object):
       result += self._CmdFilter(attr, [], append)
     return result
 
-  def _CmdMaxTargets(self, command_name, args, append=False):
+  def _CmdMaxTargets(self, command_name: str, args: list[str], append=False) -> str:
     """Updates or displays maxtargets filter.
 
     Args:
@@ -476,6 +485,7 @@ class Inventory(object):
       raise ValueError('Max Targets is a non-cardinal value: "%s"' % maxtargets)
 
     self._maxtargets = maxtargets
+    return ''
   # pylint: enable=unused-argument
 
   def _Flatten(self, container):
@@ -638,15 +648,15 @@ class Inventory(object):
     return '\n'.join(display_string)
 
   ############################################################################
-  # Methods related to managing and serving the device inventory.            #
+  # Methods related to building, managing and serving the device inventory.  #
   ############################################################################
 
-  def _GetDevices(self) -> dict[str, typing.Tuple]:
+  def _GetDevices(self) -> dict[str, typing.NamedTuple]:
     """Returns a dict of Device objects. Blocks until devices have loaded."""
 
     if self.batch and not self._devices:
       # In batch mode we retrieve the devices from backend each time.
-      self._LoadDevices()
+      self._BuildDeviceData()
       logging.debug('GetDevices: triggered load of devices.')
 
     # Wait for any pending device load.
@@ -657,61 +667,50 @@ class Inventory(object):
     return self._devices
 
   def _GetDeviceList(self) -> list[str]:
-    """Returns a list of Device name."""
+    """Returns a list of Device names."""
 
     # A value of 'None' means the list needs to be built first.
     if self._device_list is not None:
       return self._device_list
     return self._BuildDeviceList()
 
-  def _Excluded(self, devicename, device_attrs):
-    """Returns true if device matches an exclusions filter."""
+  def _FilterMatch(self, devicename: str, device_attrs: typing.NamedTuple,
+                   exclude=False) -> bool:
+    """Returns true if device matches the inclusion/exclusion filter."""
 
-    for attr in self._exclusions:
+    filter = self._exclusions if exclude else self._inclusions
+    prefix = 'x' if exclude else ''
+    for attr in filter:
       # Blank filters are ignored.
-      if not self._exclusions[attr]:
+      if not filter[attr]:
         continue
-      # For xtargets we match on device name.
-      if attr == 'xtargets':
+      
+      # For xtargets we match on device name as the attributes value.
+      if attr == prefix + 'targets':
         attr_value = devicename
       else:
-        # Strip 'x' prefix.
-        stripped_attr = attr[1 :]
+        # Strip 'x' attribute prefix if an exclusion.
+        stripped_attr = attr[1 :] if exclude else attr
         attr_value = getattr(device_attrs, stripped_attr, None)
         # Devices without this attribute are ignored.
-        if attr_value is None:
+        if not attr_value:
           continue
 
-      # If the attribute matches then this is a device to exclude.
-      if self._Match(attr, attr_value):
-        return True
-
-    return False
-
-  def _Included(self, devicename, device_attrs):
-    """Returns true if device matches all filters for inclusion."""
-
-    for attr in self._inclusions:
-      # Blank filters are ignored.
-      if not self._inclusions[attr]:
-        continue
-      # For targets we match on device name.
-      if attr == 'targets':
-        attr_value = devicename
+      matched = self._Match(attr, attr_value)
+      # For exclusion, exclude as soon as one matches.
+      if exclude:
+        if matched:
+          return True
+      # For inclusion, don't include as soon as one doesn't match.
       else:
-        attr_value = getattr(device_attrs, attr, None)
-        # Devices without this attribute are not a match.
-        if attr_value is None:
+        if not matched:
           return False
 
-      # If the attribute does not match then this device is not included.
-      if not self._Match(attr, attr_value):
-        return False
+    # If we get to here then match if an inclusion, or not if an exclusion.
+    return not exclude
 
-    return True
-
-  def _BuildDeviceList(self):
-    """Parses devices against filters and builds a device list.
+  def _BuildDeviceList(self) -> list[str]:
+    """Parses device inventory against filters and builds a device list.
 
     Builds the device_list by matching each device against the filters and
     exclusions.
@@ -723,67 +722,75 @@ class Inventory(object):
     """
 
     self._device_list = []
-    # Special case, null targets doesn't match any devices.
+    # Special case, a null targets expression doesn't match any devices.
     if not self._inclusions['targets']:
       return self._device_list
 
     device_list = []
     for (devicename, d) in self._GetDevices().items():
       # Skip devices that match any non-blank exclusions.
-      if self._Excluded(devicename, d):
+      if self._FilterMatch(devicename, d, exclude=True):
         continue
 
       # Include devices that match all filters (blank is a match).
-      if self._Included(devicename, d):
+      if self._FilterMatch(devicename, d):
         device_list.append(devicename)
 
     if self._maxtargets and len(device_list) > self._maxtargets:
       raise ValueError('Target list exceeded Maximum targets limit of: %s.' %
                        self._maxtargets)
+
+    # Cache the result.
     self._device_list = device_list
     logging.debug('Device List length: %d', len(self._device_list))
     return self._device_list
 
-  def _AsyncLoadDevices(self):
+  def _AsyncBuildDeviceData(self) -> None:
     try:
       self._FetchDevices()
     finally:
       self._devices_loaded.set()
 
-  def _FetchDevices(self):
+  def _FetchDevices(self) -> typing.Never:
     """Fetches Devices from external store ."""
 
     raise NotImplementedError
 
-  def _LoadDevices(self):
+  def _BuildDeviceData(self) -> None:
     """Loads Devices from external store."""
 
     # Wait for any pending load to complete.
     self._devices_loaded.wait()
     # Block reads of the devices until loaded.
     self._devices_loaded.clear()
+    # Collect result in a thread so it can complete in the background.
     self._devices_thread = threading.Thread(name='Device loader',
-                                            target=self._AsyncLoadDevices,
+                                            target=self._AsyncBuildDeviceData,
                                             daemon=True)
     self._devices_thread.start()
 
-  def _Match(self, attr, attr_value):
+  def _Match(self, attr: str, attr_value: str | list[str] | list[list[str]]) -> bool:
     """Returns if a attribute value matches the corresponding filter."""
 
-    # If we have list of attributes, recurse down to find match.
+    # If we have a list of attributes, recurse down to find match.
+    # This might be the case if matching the presence of a Flag.
     if isinstance(attr_value, list):
       for attr_elem in attr_value:
         if self._Match(attr, attr_elem):
           return True
       return False
 
+    # Is there this attribute, is it set and does it match?
     if (attr in self._literals_filter and self._literals_filter[attr] and
         attr_value in self._literals_filter[attr]):
       return True
+    
+    # Regular expressions are held separately as compiled expressions.
     if attr in self._compiled_filter:
       for regexp in self._compiled_filter[attr]:
         if regexp.match(attr_value):
           return True
+        
     return False
 
   #############################################################################
