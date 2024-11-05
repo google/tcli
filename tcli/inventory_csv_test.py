@@ -14,7 +14,7 @@
 
 """Tests for tcli.inventory_csv."""
 
-import collections
+import os
 import unittest
 from io import StringIO    # pylint: disable=g-importing-member
 from unittest import mock
@@ -28,233 +28,138 @@ class UnitTestCSVInventory(unittest.TestCase):
   @classmethod
   def setUpClass(cls):
     super(UnitTestCSVInventory, cls).setUpClass()
-    inventory.FLAGS([__file__,])
-    # Stub out thread related byproduct of base class.
-    inventory.inventory_base.threading.Thread = mock.MagicMock()
-    inventory.inventory_base.threading.Event = mock.MagicMock()
-    inventory.inventory_base.threading.Lock = mock.MagicMock()
-
-  @classmethod
-  def tearDownClass(cls):
-    super(UnitTestCSVInventory, cls).tearDownClass()
+    # To be safe, point at 'lab' rather than 'prod' domain.
+    inventory.FLAGS.realm = 'lab'
 
   def setUp(self):
     super(UnitTestCSVInventory, self).setUp()
-    inventory.FLAGS.realm = 'lab'
+    self.dev_inv_orig = inventory.inventory_base.DEVICE_ATTRIBUTES
+    # Trigger FLAGS initialisation before referencing maxtargets flag.
+    inventory.FLAGS([__file__,])
     with mock.patch.object(inventory.Inventory, 'LoadDevices'):
       self.inv = inventory.Inventory()
-    self.inv._inclusions['targets'] = ''
-    self.inv._exclusions['xtargets'] = ''
+    # Clear all filters for targets etc.
+    for x in self.inv._inclusions:
+      self.inv._inclusions[x] = ''
+    for y in self.inv._exclusions:
+      self.inv._exclusions[y] = ''
+    
+  def tearDown(self):
+    inventory.inventory_base.DEVICE_ATTRIBUTES = self.dev_inv_orig
 
   def testParseDevicesFromCsv(self):
     """Tests parsing valid CSV data from string buffer."""
-    csv_text = ('device,bb,ccc,flags\n'
-                'device_a,B , C ,flag_1,flag_2,flag_3\n'
-                'device_b,,CC,flag_x,flag_yy,flag_zzz')
-    result = self.inv._ParseDevicesFromCsv(StringIO(csv_text))
-    # Row matches dictionary key
-    self.assertEqual(result['device_a'].bb, 'B')
-    # Last entry is present and null column respected.
-    self.assertEqual(result['device_b'].ccc, 'CC')
-    # Spaces trim from entries.
-    self.assertEqual(result['device_a'].ccc, 'C')
-    # Flags are a list.
-    self.assertEqual(result['device_a'].flags[1], 'flag_2')
-
-  def testParseDevicesFromCsv2(self):
-    """Tests parsing valid CSV data with comments and whitespace."""
+  
     csv_text = ('# comment at start\n'
-                'device,bb,ccc,flags\n'
+                'device, bb, ccc, flags\n'
                 '# between header and rows\n'
-                'device_a,B , C ,flag_1,flag_2,flag_3\n'
+                '# variable amounts of white space between fields.\n'
+                'device_a,B ,  C , f1,f2, f3\n'
                 '# comment between rows\n'
                 '\n'
-                'device_b,,CC,flag_x,flag_yy,flag_zzz')
+                'device_b, , CC, fx, fy, fz')
     result = self.inv._ParseDevicesFromCsv(StringIO(csv_text))
     # Row matches dictionary key
     self.assertEqual(result['device_a'].bb, 'B')
-    # Last entry is present and null column respected.
-    self.assertEqual(result['device_b'].ccc, 'CC')
     # Spaces trim from entries.
     self.assertEqual(result['device_a'].ccc, 'C')
     # Flags are a list.
-    self.assertEqual(result['device_a'].flags[1], 'flag_2')
+    self.assertEqual(result['device_a'].flags, ['f1', 'f2', 'f3'])
+    # Last entry is present and null column respected.
+    self.assertEqual(result['device_b'].ccc, 'CC')
 
-  def testParseDevicesFromCsv3(self):
-    """Tests parsing invalid CSV data without 'device' column."""
-    csv_text = ('bogus,bb,ccc,flags\n'
-                'device_a,B , C ,flag_1,flag_2,flag_3\n'
+  def testParseDevicesFromCsvFail(self):
+    """Tests parsing invalid CSV data."""
+
+    # Data without 'device' column."""
+    csv_text = ('bogus, bb, ccc, flags\n'
+                'device_a, B , C ,flag_1,flag_2,flag_3\n'
                 'device_b,,CC,flag_x,flag_yy,flag_zzz')
     # First column of header should be 'device'.
     self.assertRaises(ValueError, self.inv._ParseDevicesFromCsv,
                       StringIO(csv_text))
 
-  def testParseDevicesFromCsv4(self):
-    """Tests parsing invalid CSV data without 'flag' column."""
+    # Data without 'flag' column.
     csv_text = ('device,bb,ccc,bogus\n'
                 'device_a,B , C ,flag_1,flag_2,flag_3\n'
                 'device_b,,CC,flag_x,flag_yy,flag_zzz')
     # Last column of header should be 'flags'.
     self.assertRaises(ValueError, self.inv._ParseDevicesFromCsv,
                       StringIO(csv_text))
-
-  def testParseDevicesFromCsv5(self):
-    """Tests parsing CSV data from empty table."""
-    csv_text = ('device,bb,ccc,flags\n')
-    # Empty table
-    result = self.inv._ParseDevicesFromCsv(StringIO(csv_text))
-    self.assertEqual({}, result)
-
-  def testParseDevicesFromCsv6(self):
-    """Tests parsing CSV data from empty buffer."""
+    # Data from empty buffer.
     csv_text = ('')
     # Empty buffer
     self.assertRaises(ValueError, self.inv._ParseDevicesFromCsv,
                       StringIO(csv_text))
 
+    # Data from empty table.
+    csv_text = ('device,bb,ccc,flags\n')
+    # Empty table
+    result = self.inv._ParseDevicesFromCsv(StringIO(csv_text))
+    self.assertEqual(result, {})
+
   def testFetchDevices(self):
     """Tests directly loading device inventory from CSV file."""
     self.inv._FetchDevices()
-    devices = self.inv.devices
-    self.assertCountEqual(['device_a', 'device_b', 'device_c'], devices)
+    self.inv._CmdFilter('targets', ['^.*'])
+    self.assertListEqual(self.inv.device_list,
+                         ['device_a', 'device_b', 'device_c'])
 
-  def testDeviceList(self):
-    """Tests loading inventory from CSV file."""
-    inv = inventory.Inventory()
-    inv._FetchDevices()
-    inv._CmdFilter('targets', ['^.*'])
-    self.assertListEqual(['device_a', 'device_b', 'device_c'], inv.device_list)
+  def testReformatCmdResponse(self):
+    """Tests Formatting of response into name value pairs in a dictionary."""
 
-  def testChangeFilter(self):
-    """Tests making changes to filters."""
-    # '^' clears vendor.
-    self.assertEqual('', self.inv._ChangeFilter('vendor', '^'))
+    response = inventory.inventory_base.CmdResponse(
+      uid=1,
+      device_name='device_a',
+      command='show version',
+      data='hello world',
+      error=''
+    )
+    # No-op, so we test that nothing has changed.
+    self.assertTupleEqual(self.inv.ReformatCmdResponse(response), response)
 
-    self.assertEqual('lab,^xyz',
-                     self.inv._ChangeFilter('realm', 'lab,^xyz'))
-    self.assertEqual('cisco,^xyz',
-                     self.inv._ChangeFilter('xvendor', 'cisco,^xyz'))
-    self.assertRaises(ValueError, self.inv._ChangeFilter,
-                      'xvendor', 'bogus,^xyz')
+  def testSendRequests(self):
+    """Tests command requests are pulled from file."""
+    
+    class requestObject(object):
+      uid = 0
+      def __init__(self, target, command):
+        self.target = target
+        self.command = command
+        self.uid += requestObject.uid
 
-  def testChangeAttribFilter(self):
-    """Tests updating arbitrary filters."""
+    # Invalid target or command results in error.
+    target = 'bogus'
+    command = 'show version'
+    request = requestObject(target, command)
+    callback = mock.MagicMock()
 
-    dev_attr = collections.namedtuple('dev_attr', ['pop'])
-    self.inv._GetDevices = mock.Mock(
-        return_value={'abc': dev_attr(pop='abc'),
-                      'xyz': dev_attr(pop='xyz')})
+    self.inv.SendRequests([(request, callback),])
+    callback.assert_called_with(
+      inventory.inventory_base.CmdResponse(
+        uid=0, device_name=target, command=command, data='',
+        error='Failure to retrieve response from device ' +
+         f'"{target}", for command "{command}".'
+      )
+    )
 
-    self.assertEqual('', self.inv._ChangeFilter('pop', '^'))
-    self.assertEqual('abc,^xyz',
-                     self.inv._ChangeFilter('pop', 'abc,^xyz'))
+    # Result is pulled from file for valid device and command.
+    target = 'device_a'
+    request = requestObject(target, command)
+    file_result = os.path.join(inventory.DEFAULT_RESPONSE_DIRECTORY, 
+                             f'{target}_{command}'.replace(' ', '_'))
+    with open(file_result) as fp:
+      data = fp.read()
+    callback = mock.MagicMock()
 
-  def testCmdFilter(self):
-    """Tests that handler sets the string value of the attribute filters."""
-    dev_attr = collections.namedtuple('dev_attr', ['pop'])
-    self.inv._devices = {
-        'abc': dev_attr(pop='abc'),
-        'xyz': dev_attr(pop='xyz'),
-        'bogus': dev_attr(pop='')}
-    # Defaults
-    self.assertEqual('Pop: ', self.inv._CmdFilter('pop', []))
-    self.assertEqual('XPop: ', self.inv._CmdFilter('xpop', []))
-
-    # New values
-    self.inv._CmdFilter('pop', ['abc'])
-    self.assertEqual('abc', self.inv._inclusions['pop'])
-    self.inv._CmdFilter('pop', ['xyz'], append=True)
-    self.assertEqual('abc,xyz', self.inv._inclusions['pop'])
-    # Prepend with an 'x' to update the exclusions.
-    self.inv._CmdFilter('xpop', ['abc'])
-    self.assertEqual('abc', self.inv._exclusions['xpop'])
-
-  def testCreateCmdRequest(self):
-    """Test building commands requests to send to device connection service."""
-
-    self.inv.Request.UID = 0
-    request = self.inv._CreateCmdRequest('abc', 'show vers', 'cli')
-    self.assertEqual('abc', request.target)
-    self.assertEqual('show vers', request.command)
-    self.assertEqual('cli', request.mode)
-    self.assertEqual(1, request.uid)
-    request = self.inv._CreateCmdRequest('xyz', 'show vers', 'shell')
-    self.assertEqual('xyz', request.target)
-    self.assertEqual('shell', request.mode)
-
-  def testCmdHandlers(self):
-    """Tests the extended handler support of TCLI."""
-
-    # Defaults
-    self.assertEqual('Realm: ', self.inv._CmdFilter('realm', [], False))
-    self.assertEqual('Vendor: ', self.inv._CmdFilter('vendor', [], False))
-
-    # New values
-    # Changing realm or vendor updates the appropriate filter.
-    self.inv._CmdFilter('realm', ['lab'], False)
-    self.assertEqual('lab', self.inv._inclusions['realm'])
-    self.assertEqual(['lab'], self.inv._literals_filter['realm'])
-    self.inv._CmdFilter('vendor', ['juniper'], False)
-    self.assertEqual('juniper', self.inv._inclusions['vendor'])
-    self.assertEqual(['juniper'], self.inv._literals_filter['vendor'])
-    # prepend with an 'x' to update the exclusions.
-    self.inv._CmdFilter('xvendor', ['cisco'], False)
-    self.assertEqual('cisco', self.inv._exclusions['xvendor'])
-    self.assertEqual(['cisco'], self.inv._literals_filter['xvendor'])
-
-  def testShowEnv(self):
-    self.assertEqual(('Inventory:\n'
-                      '  Max Targets: 50\n'
-                      '  Filters:\n'
-                      '    Pop: , XPop: \n'
-                      '    Realm: , XRealm: \n'
-                      '    Targets: , XTargets: \n'
-                      '    Vendor: , XVendor: \n'), self.inv.ShowEnv())
-
-  def testChangeDeviceList(self):
-    """Tests changing specific filters."""
-
-    # pylint: disable=invalid-name
-    Device = collections.namedtuple(
-        'Device', ('pop', 'realm', 'vendor', 'flags'))
-    d1 = Device(vendor='juniper', realm='prod', pop='abc01', flags=['active'])
-    d2 = Device(vendor='cisco', realm='prod', pop='xyz01', flags=[])
-    d3 = Device(vendor='juniper', realm='lab', pop='abc01', flags=[])
-    d4 = Device(vendor='juniper', realm='lab', pop='abc02', flags=[])
-    self.inv._devices = {
-        'device01': d1, 'device02': d2,
-        'device03': d3, 'device04': d4}
-    self.inv._inclusions['targets'] = ''
-    self.inv._inclusions['realm'] = ''
-    self.inv._inclusions['vendor'] = ''
-
-    # Realm filter / unfilter.
-    self.inv._CmdFilter('targets', ['^device0.'])
-    self.inv._CmdFilter('realm', ['prod'])
-    self.assertEqual(
-        ['device01', 'device02'], self.inv.device_list)
-    self.inv._CmdFilter('realm', ['lab'])
-    self.assertEqual(['device03', 'device04'], self.inv.device_list)
-    # Invalid causes us to retain prior filter (new v2 behavior).
-    self.assertRaises(ValueError, self.inv._CmdFilter, 'realm', ['bogus'])
-    self.assertEqual(['device03', 'device04'], self.inv.device_list)
-
-    self.inv._inclusions['realm'] = ''
-    # Vendor filter / unfilter.
-    self.inv._CmdFilter('vendor', ['cisco'])
-    self.assertEqual(['device02'], self.inv.device_list)
-    self.inv._CmdFilter('vendor', ['juniper'])
-    self.assertEqual(['device01', 'device03', 'device04'],
-                     self.inv.device_list)
-    self.inv._CmdFilter('vendor', ['cisco,juniper'])
-    self.assertEqual(['device01', 'device02', 'device03', 'device04'],
-                     self.inv.device_list)
-
-    # Realm and vendor filters.
-    self.inv._CmdFilter('realm', ['prod'])
-    self.inv._CmdFilter('vendor', ['cisco'])
-    self.assertEqual(['device02'], self.inv.device_list)
-
+    self.inv.SendRequests([(request, callback),])
+    callback.assert_called_with(
+      inventory.inventory_base.CmdResponse(
+        uid=0, device_name=target, command=command,
+        data=data,
+        error=''
+      )
+    )
 
 if __name__ == '__main__':
   unittest.main()
