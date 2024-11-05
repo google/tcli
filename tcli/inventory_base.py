@@ -32,6 +32,8 @@ import typing
 from absl import flags
 from absl import logging
 
+# Global vars so flags.FLAGS has inventroy intelligence in the main program.
+
 TILDE_COMMAND_HELP = {
     'attributes': """
     Filter targets based on an attribute of the device.
@@ -77,8 +79,15 @@ DEFAULT_MAXTARGETS = 50
 # commands to them as the exception rather than the rule).
 DEFAULT_XTARGETS = ''
 # System wide set of device attributes that a device may have.
-# Usually populated by the child module that actually populates the inventory.
+# Populated by the child module that actually populates the inventory.
 DEVICE_ATTRIBUTES = {}
+# The single device entry in the inventory. Set in child module.
+DEVICE = None
+
+# TODO(harro): Define CmdRequest here too?
+# Data format of response.
+CmdResponse = collections.namedtuple(
+    'CmdResponse', ['uid', 'device_name', 'command', 'data', 'error'])
 
 FLAGS = flags.FLAGS
 
@@ -95,11 +104,6 @@ flags.DEFINE_string(
     'xtargets', DEFAULT_XTARGETS,
     TILDE_COMMAND_HELP['xtargets'],
     short_name='X')
-
-
-# Data format of response.
-CmdResponse = collections.namedtuple(
-    'CmdResponse', ['uid', 'device_name', 'command', 'data', 'error'])
 
 
 class Error(Exception):
@@ -236,15 +240,27 @@ class Inventory(object):
       return self._CreateCmdRequest(target, command, mode)
 
   def GetDevices(self):
-    """Returns a dict of Device objects. Blocks until devices have loaded."""
+    """Loads Devices from external store.
+
+    Stores data in _devices in a format like:
+    {'devicename1: Device(attribute1='value1',
+                          attribute2='value2',
+                          ... ),
+     'devicename2: Device('attribute1='value3',
+                          ... ),
+     ...
+    }
+    """
+  
     with self._lock:
       return self._GetDevices()
 
   def GetDeviceList(self):
-    """Returns a list of Device names."""
+    """Returns a filtered list of Devices."""
     with self._lock:
       return self._GetDeviceList()
 
+  # TODO(harro): Remove this, we should only need GetDevices.
   def LoadDevices(self):
     """Loads Devices from external store.
 
@@ -286,7 +302,7 @@ class Inventory(object):
   def RegisterCommands(self, cmd_register):
     """Add module specific command support to TCLI."""
 
-    # Register common to any inventory source.
+    # Register commands common to any inventory source.
     cmd_register.RegisterCommand('attributes', TILDE_COMMAND_HELP['attributes'],
                                  max_args=2, append=True, regexp=True,
                                  inline=True, short_name='A',
@@ -312,7 +328,7 @@ class Inventory(object):
                                  short_name='X', default_value=FLAGS.xtargets,
                                  handler=self._CmdFilter)
 
-    # Register commands specific to a source.
+    # Register commands specific to this inventory source.
     for attribute in DEVICE_ATTRIBUTES.values():
       if attribute.command_flag and attribute.attrib_name in FLAGS:
         default_value = getattr(FLAGS, attribute.attrib_name)
@@ -368,7 +384,8 @@ class Inventory(object):
   def _CmdFilterCompleter(self, word_list, state):
     """Returns a command completion list for valid attribute completions."""
 
-    # Only complete on the first word, the attribute name.
+    # Only complete on a single word, the attribute name.
+    #TODO(harro): Why accept a list if we only support matching the first word?
     if not word_list or len(word_list) > 1:
       return None
 
@@ -422,12 +439,12 @@ class Inventory(object):
     # Appending a new filter string to an existing filter.
     if append and filter_string and filters[command_name]:
       filter_string = ','.join([filters[command_name], filter_string])
-
+    #TDOD(harro): Replace _ChangeFilter with _AttributeFilter.
     filters[command_name] = self._ChangeFilter(command_name, filter_string)
     return ''
 
   def _AttributeFilter(self, command_name: str, args: list[str], append=False) -> str:
-    """Displays the inventory inclusions or exclusions (filters).
+    """Updates or displays the inventory inclusions or exclusions (filters).
 
     Args:
       command_name: 'attributes' or 'xattributes'.
@@ -562,7 +579,7 @@ class Inventory(object):
     Store the literal device names and compiled regular expressions
     in respective dictionary.
 
-    Clear the device_list so the next time it is queried it will be built
+    Clear the device_list so the next time it is queried it will be rebuilt
     from these newly updated filter content.
 
     Args:
@@ -645,7 +662,7 @@ class Inventory(object):
           self._FormatLabelAndValue(f, self._inclusions[f]),
           self._FormatLabelAndValue(x, self._exclusions[x], caps=2)))
 
-    return '\n'.join(display_string)
+    return '\n'.join(display_string) + '\n'
 
   ############################################################################
   # Methods related to building, managing and serving the device inventory.  #

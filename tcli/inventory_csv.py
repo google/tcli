@@ -61,6 +61,10 @@ DEVICE_ATTRIBUTES['vendor'] = inventory_base.DeviceAttribute(
     '\n    Limit device lists to a specific vendor/s', display_case='title',
     command_flag=True)
 
+# Set here if known.
+# In the case here this will be overwritten once the CSV content is known.
+DEVICE = inventory_base.DEVICE
+
 
 # TODO(harro): Handle the 'flags' attribute and filtering.
 
@@ -109,7 +113,7 @@ class Inventory(inventory_base.Inventory):
 
     # The extra attribute filters get picked up automatically.
     # So we call the parent unchanged.
-    return '%s\n' % (super(Inventory, self)._ShowEnv())
+    return super(Inventory, self)._ShowEnv()
 
   ############################################################################
   # Methods related to managing and serving the device inventory.            #
@@ -171,9 +175,9 @@ class Inventory(inventory_base.Inventory):
     # Strip device, it will be used for the index.
     header_list = header_list[1 :]
     header_length = len(header_list)
+    # Data format for a single device entry.
+    DEVICE = collections.namedtuple('Device', header_list)
 
-    # pylint: disable=invalid-name
-    Device = collections.namedtuple('Device', header_list)
     # pylint: enable=invalid-name
     devices = {}
     # xreadlines would be better but not supported by StringIO for testing.
@@ -194,7 +198,7 @@ class Inventory(inventory_base.Inventory):
         row_list = row_list[0:header_length - 1]
         row_list.append(device_flags)
       try:
-        devices[device_name] = Device(*row_list)
+        devices[device_name] = DEVICE(*row_list)
       except TypeError:
         raise ValueError('Final column header must be "flags" if'
                          ' rows are to be variable length.\n'
@@ -214,7 +218,25 @@ class Inventory(inventory_base.Inventory):
   ############################################################################
 
   def _ReformatCmdResponse(self, response):
-    """Formats command response into a named tuple."""
+    """Formats command response into name value pairs in a dictionary.
+
+    The device manager specific format of the response is transformed into a
+    more generic dictionary format:
+
+      {
+        'device_name': Device name string
+        'device': Corresponding entry for the device in the device inventory.
+        'command': Command string issued to device
+        'error': Optional error message string
+        'data': Command response string, null if error string populated.
+      }
+
+    Args:
+      response: device manager response object for a single device with a
+                uid that corresponds to uid of original request.
+    Returns:
+      Dictionary representation of command response.
+    """
 
     # No-Op as response if already formatted correctly by _SendRequests.
     return response
