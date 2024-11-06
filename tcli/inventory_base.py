@@ -142,7 +142,7 @@ class DeviceAttribute(object):
 
 
 class Inventory(object):
-  """ADT Class for device inventory retrieval and command submission.
+  """Class for device inventory retrieval and command submission.
 
   Public classes should not require modification and should not be referenced
   directly here. They are simply thread safe wrappers for the private methods
@@ -151,7 +151,6 @@ class Inventory(object):
   Source specific instantiations of the class should replace private methods.
 
   Attributes:
-    batch: Bool indicating that the inventory is being used non interactively.
     devices: A dict (keyed by string) of Device objects. Read-only.
     device_list: Array of device names satisfying the filters.
     source: String identifier of source of device inventory.
@@ -169,10 +168,9 @@ class Inventory(object):
       self.command = ''
       self.mode = ''
 
-  def __init__(self, batch=False):
+  def __init__(self):
     """Initialise thread safe access to data to support async calls."""
 
-    self.batch = batch
     # Devices keyed on device name.
     # Each value is a dictionary of attribute/value pairs.
     # If we have already loaded the devices, don't do it again.
@@ -196,16 +194,11 @@ class Inventory(object):
     logging.debug('Device attributes statically defined: "%s".',
                   DEVICE_ATTRIBUTES)
     for attr in DEVICE_ATTRIBUTES:
-      if attr == 'flags':
-        # TODO(harro): Add support for filtering on flag values.
-        continue
+      # TODO(harro): Add support for filtering on flag values.
+      if attr == 'flags': continue
       self._inclusions[attr] = ''
       self._exclusions['x' + attr] = ''
 
-    if not batch:
-      # Load full device inventory (once) if we are interactive.
-      self.LoadDevices()
-      logging.debug('Device inventory load triggered for interactive mode.')
 
   ############################################################################
   # Thread safe public methods and properties.                               #
@@ -260,7 +253,6 @@ class Inventory(object):
     with self._lock:
       return self._GetDeviceList()
 
-  # TODO(harro): Remove this, we should only need GetDevices.
   def LoadDevices(self):
     """Loads Devices from external store.
 
@@ -275,7 +267,7 @@ class Inventory(object):
     """
 
     with self._lock:
-      self._BuildDeviceData()
+      self._LoadDevices()
 
   def ReformatCmdResponse(self, response):
     """Formats command response into name value pairs in a dictionary.
@@ -539,16 +531,14 @@ class Inventory(object):
       # Filter matching is case insensitive.
       (literals, compiled) = self._DecomposeFilter(arg, ignore_case=True)
 
-      if not self.batch and literals:
+      if literals:
         attribute = filter_name
         # Trim off the 'x' prefix for matching exclusions against attributes.
         if filter_name.startswith('x'):
           attribute = attribute[1 :]
 
         if attribute == 'targets':
-          # Warn user if literal is unknown, skip warning in batch mode
-          # as it is less valuable in this context and would trigger a
-          # re-retrieval of the inventory.
+          # Warn user if literal is unknown.
           validate_list = self._GetDevices()
 
         elif (attribute in DEVICE_ATTRIBUTES and
@@ -671,12 +661,7 @@ class Inventory(object):
   def _GetDevices(self) -> dict[str, typing.NamedTuple]:
     """Returns a dict of Device objects. Blocks until devices have loaded."""
 
-    if self.batch and not self._devices:
-      # In batch mode we retrieve the devices from backend each time.
-      self._BuildDeviceData()
-      logging.debug('GetDevices: triggered load of devices.')
-
-    # Wait for any pending device load.
+    # Wait for any pending device loading.
     self._devices_loaded.wait()
     if not self._devices:
       raise InventoryError(
@@ -686,10 +671,10 @@ class Inventory(object):
   def _GetDeviceList(self) -> list[str]:
     """Returns a list of Device names."""
 
-    # A value of 'None' means the list needs to be built first.
-    if self._device_list is not None:
-      return self._device_list
-    return self._BuildDeviceList()
+    # 'None' means the list needs to be built first.
+    if self._device_list is None: return self._BuildDeviceList()
+    return self._device_list
+     
 
   def _FilterMatch(self, devicename: str, device_attrs: typing.NamedTuple,
                    exclude=False) -> bool:
@@ -773,7 +758,7 @@ class Inventory(object):
 
     raise NotImplementedError
 
-  def _BuildDeviceData(self) -> None:
+  def _LoadDevices(self) -> None:
     """Loads Devices from external store."""
 
     # Wait for any pending load to complete.
@@ -831,3 +816,6 @@ class Inventory(object):
   def _SendRequests(self, requests_callbacks, deadline=None):
     """Submit command requests to device manager."""
     raise NotImplementedError
+
+class AttributeFilter(object):
+  """Commands and data for matching attribute filters against devices."""

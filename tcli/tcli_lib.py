@@ -14,9 +14,8 @@
 
 """TCLI - Accesses CLI of network devices.
 
-TCLI is a frontend to TextFSM that supports batch or interactive execution of
-commands on multiple target devices and returns the results in one of several
-formats.
+TCLI is a frontend to TextFSM that supports interactive execution of commands on
+multiple target devices and returns the results in one of several formats.
 
 Type '%shelp' to get started. All TCLI commands are prefixed with a '%s'.
 All other commands are forwarded to the target device/s for execution.
@@ -35,8 +34,6 @@ by inline commands.
 Commands can be passed through to the shell with '%s!' or '%sexec'.
 
 The file '~/.tclirc' is executed at startup by TCLI.
-
-TCLI can be run interactively or in batch mode.
 
 Starts in 'safe mode' when run interactively, toggle with '%sS' or '%ssafemode'.
 """
@@ -454,9 +451,10 @@ class TCLI(object):
     """Inits inventory and triggers async load of device data."""
 
     try:
-      self.inventory = inventory.Inventory(batch=not self.interactive)
+      self.inventory = inventory.Inventory()
       # Add additional command support for Inventory library.
       self.inventory.RegisterCommands(self.cli_parser)
+      self.inventory.LoadDevices()
     except inventory.AuthError as error_message:
       self._PrintWarning(str(error_message))
       raise inventory.AuthError()
@@ -598,7 +596,7 @@ class TCLI(object):
       Run the RC file, after which we re-appply explicitly set flags values.
     Args:
       commands: List of Strings, device commands to send at startup.
-      interactive: Bool, are we running as an interactive CLI or batch.
+      interactive: Bool, are we running as an interactive CLI.
 
     Raises:
       EOFError: A non-default config_file could not be opened.

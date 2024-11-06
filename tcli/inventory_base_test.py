@@ -53,12 +53,9 @@ class InventoryBaseTest(unittest.TestCase):
   def setUp(self):
     super(InventoryBaseTest, self).setUp()
     self.dev_inv_orig = inventory_base.DEVICE_ATTRIBUTES
-    with mock.patch.object(inventory_base.Inventory, 'LoadDevices'):
-      self.inv = inventory_base.Inventory(batch=False)
+    self.inv = inventory_base.Inventory()
+    self.inv.LoadDevices()
     self._ClearFilters()
-    # TODO(harro): Tests should pass regardless of batch mode.
-    # Move DeviceLoad logic out of __init__
-    self.inv.batch = True
 
   def tearDown(self):
     inventory_base.DEVICE_ATTRIBUTES = self.dev_inv_orig
@@ -83,9 +80,6 @@ class InventoryBaseTest(unittest.TestCase):
   def testGetDevices(self):
     """Test building dict of Device objects."""
 
-    # TODO(harro): This should pass regardless of batch mode.
-    # Move DeviceLoad logic out of __init__
-    self.inv.batch = True
     self.assertListEqual(
       list(self.inv.GetDevices().keys()), 
       ['device01', 'device02', 'device03', 'device04'])
@@ -274,10 +268,7 @@ class InventoryBaseTest(unittest.TestCase):
                      'lab,^xyz\\d\\d')
     self.assertEqual(self.inv._ChangeFilter('xvendor', 'cisco,^xyz'), 
                      'cisco,^xyz')
-    
-    # In interactive (not batch) mode the static values for targets are expected
-    #  to match an inventory entry. Raise exception if this is not the case.
-    self.inv.batch = False
+  
     self.assertRaises(ValueError, self.inv._ChangeFilter, 'vendor', 'bogus')
     self.assertRaises(
       ValueError, self.inv._ChangeFilter,'xvendor', 'bogus,^xyz')

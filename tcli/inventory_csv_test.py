@@ -36,8 +36,8 @@ class UnitTestCSVInventory(unittest.TestCase):
     self.dev_inv_orig = inventory.inventory_base.DEVICE_ATTRIBUTES
     # Trigger FLAGS initialisation before referencing maxtargets flag.
     inventory.FLAGS([__file__,])
-    with mock.patch.object(inventory.Inventory, 'LoadDevices'):
-      self.inv = inventory.Inventory()
+    self.inv = inventory.Inventory()
+    self.inv.LoadDevices()
     # Clear all filters for targets etc.
     for x in self.inv._inclusions:
       self.inv._inclusions[x] = ''
