@@ -132,6 +132,8 @@ class UnitTestTCLI(unittest.TestCase):
 
   def setUp(self):
     super(UnitTestTCLI, self).setUp()
+    # Instantiate FLAGS global var.
+    tcli.FLAGS([__file__,])
     # Turn off looking for .tclirc
     tcli.FLAGS.color = False
     tcli.FLAGS.config_file = 'none'

@@ -23,24 +23,27 @@ from tcli import inventory_base
 
 class InventoryBaseTest(unittest.TestCase):
 
+  def _ClearFilters(self):
+    """Clear all filters for targets etc."""
+    for x in self.inv._inclusions: self.inv._inclusions[x] = ''
+    for y in self.inv._exclusions: self.inv._exclusions[y] = ''
+
   @classmethod
   def setUpClass(cls):
     super(InventoryBaseTest, cls).setUpClass()
     inventory_base.FLAGS([__file__,])
     # To be safe, point at 'lab' rather than 'prod' domain.
     inventory_base.FLAGS.realm = 'lab'
-    # Stub out thread safe support.
-    # inventory_base.threading.Event = mock.MagicMock()
-    # inventory_base.threading.Lock = mock.MagicMock()
     def _FetchDevicesStub(self):
       # Fake inventory data, same columns as the CSV file.
       _d = collections.namedtuple('Device', ('pop', 'realm', 'vendor', 'flags'))
       self._devices = {
         'device01': _d(vendor='juniper', realm='prod', pop='abc01', flags=['f1']),
-        'device02': _d(vendor='cisco', realm='prod', pop='xyz01', flags=[]),
+        'device02': _d(vendor='cisco', realm='prod', pop='xyz01', flags=['f1', 'f2']),
         'device03': _d(vendor='juniper', realm='lab', pop='abc01', flags=[]), 
         'device04': _d(vendor='juniper', realm='lab', pop='abc02', 
                       flags=['f1', 'f2'])}
+      return
     inventory_base.Inventory._FetchDevices = _FetchDevicesStub
 
   @classmethod
@@ -52,11 +55,7 @@ class InventoryBaseTest(unittest.TestCase):
     self.dev_inv_orig = inventory_base.DEVICE_ATTRIBUTES
     with mock.patch.object(inventory_base.Inventory, 'LoadDevices'):
       self.inv = inventory_base.Inventory(batch=False)
-    # Clear all filters for targets etc.
-    for x in self.inv._inclusions:
-      self.inv._inclusions[x] = ''
-    for y in self.inv._exclusions:
-      self.inv._exclusions[y] = ''
+    self._ClearFilters()
     # TODO(harro): Tests should pass regardless of batch mode.
     # Move DeviceLoad logic out of __init__
     self.inv.batch = True
@@ -214,11 +213,54 @@ class InventoryBaseTest(unittest.TestCase):
     # Realm filter / unfilter.
     self.inv._CmdFilter('targets', ['^device0.'])
     self.inv._CmdFilter('realm', ['prod'])
-    self.assertEqual(self.inv.device_list, ['device01', 'device02'], )
+    self.assertListEqual(self.inv.device_list, ['device01', 'device02'])
+
+    self.inv._CmdFilter('realm', ['^$'])
+    self.assertListEqual(self.inv.device_list, 
+                     ['device01', 'device02', 'device03', 'device04'])
     
-    # Clear filter.
+    # Remove one device with xtargets.
+    self.inv._CmdFilter('xtargets', ['device02'])
+    self.assertListEqual(self.inv.device_list, 
+                         ['device01', 'device03', 'device04'])
+
+    # Remove another device with additoinal xtargets.
+    # Add some whitespace, which should be ignored.
+    self.inv._CmdFilter('xtargets', ['  device02  ,  device03  '])
+    self.assertListEqual(self.inv.device_list, ['device01', 'device04'])
+
+    # Remove two with regular matching and 
+    # two more (overlapping) via a regexp.
+    self.inv._CmdFilter('xtargets', ['device02, device03, ^.*0[34]$'])
+    self.assertListEqual(self.inv.device_list, ['device01'])
+    
+    # Set the realm to "lab" - there are no matches.
+    self.inv._CmdFilter('realm', ['lab'])
+    self.assertListEqual(self.inv.device_list, [])
+
+    # Resetting target filter value, no matches.
     self.inv._CmdFilter('targets', ['^$'])
-    self.assertEqual(self.inv.device_list, [])
+    self.assertListEqual(self.inv.device_list, [])
+
+    self._ClearFilters()
+    self.inv._CmdFilter('targets', ['^.*'])
+    self.inv._CmdFilter('realm', ['^prod|lab'])
+    self.assertListEqual(self.inv.device_list, 
+                         ['device01', 'device02', 'device03', 'device04'])
+    
+    # Use the attributes indirect command rather than the 'targets' et al.
+    self._ClearFilters()
+    self.inv._AttributeFilter('attributes', ['targets', 'device01'])
+    self.assertListEqual(self.inv.device_list, ['device01'])
+
+    # Match based on "pop" attribute.
+    self.inv._AttributeFilter('attributes', ['targets', '^.*$'])
+    self.inv._AttributeFilter('attributes', ['pop', 'abc01'])
+    self.assertListEqual(self.inv.device_list, ['device01', 'device03'])
+    # Remove both these devices based on vendor.
+    self.inv._AttributeFilter('xattributes', ['vendor', 'juniper'])
+    self.assertListEqual(self.inv.device_list, [])
+
 
   def testChangeFilter(self):
     """Tests making changes to various target filters."""

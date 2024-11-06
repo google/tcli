@@ -768,7 +768,7 @@ class Inventory(object):
     finally:
       self._devices_loaded.set()
 
-  def _FetchDevices(self) -> typing.Never:
+  def _FetchDevices(self) -> None|NotImplementedError:
     """Fetches Devices from external store ."""
 
     raise NotImplementedError
