@@ -178,21 +178,20 @@ class Inventory(object):
       self._devices = {}
     # List of device names.
     self._device_list = None
-    # Filters and exclusions added by this library.
-    self._inclusions = {'targets': ''}
-    self._exclusions = {'xtargets': ''}
-    # Store literal strings and compiled regexps in dedicated dictionary
-    # Use to accelerate matching against devices when buidling device_list
-    self._literals_filter = {}
-    self._compiled_filter = {}
     self._lock = threading.Lock()
     self._devices_loaded = threading.Event()
     self._devices_loaded.set()
     self._maxtargets = FLAGS.maxtargets
+    self._filters = AttributeFilter()
 
+    # Filters and exclusions added by this library.
+    # We always have "targets", which is matched against the device name.
+    self._inclusions = {'targets': ''}
+    self._exclusions = {'xtargets': ''}
     # Filters and exclusions added by this library.
     logging.debug('Device attributes statically defined: "%s".',
                   DEVICE_ATTRIBUTES)
+    #TODO(harro): Compare against reserved words and raise exception is a dup.
     for attr in DEVICE_ATTRIBUTES:
       # TODO(harro): Add support for filtering on flag values.
       if attr == 'flags': continue
@@ -529,7 +528,7 @@ class Inventory(object):
     else:
       # Split the string into literal and regexp elements.
       # Filter matching is case insensitive.
-      (literals, compiled) = self._DecomposeFilter(arg, ignore_case=True)
+      (literals, compiled) = self._filters.DecomposeFilter(arg, ignore_case=True)
 
       if literals:
         attribute = filter_name
@@ -560,70 +559,10 @@ class Inventory(object):
           raise ValueError('Non-regexp filter entry "%s" is not valid.' %
                            unmatched_literals)
 
-    self._ChangeDeviceListFilters(filter_name, literals, compiled)
-    return arg
-
-  def _ChangeDeviceListFilters(self, filter_name, literals, compiled):
-    """Assigns values to filters used to derive the device_list.
-
-    Store the literal device names and compiled regular expressions
-    in respective dictionary.
-
-    Clear the device_list so the next time it is queried it will be rebuilt
-    from these newly updated filter content.
-
-    Args:
-      filter_name: str filter or exclusion name.
-      literals: list of strings that represent individual devices.
-      compiled: List of compiled regular expressions.
-    """
-
-    # Shared dictionaries for filters and exclusions.
-    self._literals_filter[filter_name] = literals
-    self._compiled_filter[filter_name] = compiled
+    self._filters.SetFilters(filter_name, literals, compiled)
     # Clear device list to trigger re-application of filter.
     self._device_list = None
-
-  def _DecomposeFilter(self, filter_string, ignore_case=False):
-    """Returns a tuple of compiled and literal lists.
-
-    For device names, they are case insensitive so the compiled
-    regular expressions ignores case.
-
-    Args:
-      filter_string: str filter supplied by the user
-      ignore_case: bool for if the newly compiled regexps should ignore case.
-    Raises:
-      ValueError if a regexp is not valid.
-    Returns:
-      Tuple of lists to use in matching operations.
-    """
-
-    literal_match = []
-    re_match = []
-    for filter_item in filter_string.split(','):
-      # Spaces have no meaning, as filters never have spaces in them.
-      filter_item = filter_item.strip()
-      if filter_item:
-        if filter_item.startswith('^'):
-          # Add implicit '$' to regexp.
-          if not filter_item.endswith('$'):
-            filter_item += '$'
-          try:
-            # Filter expressions are case insensitive.
-            if ignore_case:
-              re_match.append(re.compile(filter_item, re.IGNORECASE))
-            else:
-              re_match.append(re.compile(filter_item))
-          except re.error:
-            raise ValueError('Argument regexp %r is invalid' % filter_item)
-        else:
-          if ignore_case:
-            literal_match.append(filter_item.lower())
-          else:
-            literal_match.append(filter_item)
-
-    return (literal_match, re_match)
+    return arg
 
   def _FormatLabelAndValue(self, label, value, caps=1):
     """Returns string with capitilized label and corresponding value."""
@@ -698,7 +637,7 @@ class Inventory(object):
         if not attr_value:
           continue
 
-      matched = self._Match(attr, attr_value)
+      matched = self._filters.Match(attr, attr_value)
       # For exclusion, exclude as soon as one matches.
       if exclude:
         if matched:
@@ -771,30 +710,6 @@ class Inventory(object):
                                             daemon=True)
     self._devices_thread.start()
 
-  def _Match(self, attr: str, attr_value: str | list[str] | list[list[str]]) -> bool:
-    """Returns if a attribute value matches the corresponding filter."""
-
-    # If we have a list of attributes, recurse down to find match.
-    # This might be the case if matching the presence of a Flag.
-    if isinstance(attr_value, list):
-      for attr_elem in attr_value:
-        if self._Match(attr, attr_elem):
-          return True
-      return False
-
-    # Is there this attribute, is it set and does it match?
-    if (attr in self._literals_filter and self._literals_filter[attr] and
-        attr_value in self._literals_filter[attr]):
-      return True
-    
-    # Regular expressions are held separately as compiled expressions.
-    if attr in self._compiled_filter:
-      for regexp in self._compiled_filter[attr]:
-        if regexp.match(attr_value):
-          return True
-        
-    return False
-
   #############################################################################
   # Methods related to sending commands and receiving responses from devices. #
   #############################################################################
@@ -819,3 +734,90 @@ class Inventory(object):
 
 class AttributeFilter(object):
   """Commands and data for matching attribute filters against devices."""
+
+  def __init__(self):
+    # Store literal strings and compiled regexps in separate dictionaries.
+    # Use to accelerate matching against regular expressions.
+    self._literals_filter = {}
+    self._compiled_filter = {}
+
+  def SetFilters(self, filter_name, literals, compiled):
+    """Assigns values to filters.
+
+    Store the literal values and compiled regular expressions in respective
+    dictionaries.
+
+    Args:
+      filter_name: str filter or exclusion name.
+      literals: list of strings that represent individual matches.
+      compiled: List of compiled regular expressions to match.
+    """
+
+    # Shared dictionaries for filters and exclusions.
+    self._literals_filter[filter_name] = literals
+    self._compiled_filter[filter_name] = compiled
+
+  def DecomposeFilter(self, filter_string, ignore_case=False):
+    """Returns a tuple of compiled and literal lists.
+
+    For attributes names, they are case insensitive so the compiled
+    regular expressions ignores case.
+
+    Args:
+      filter_string: str filter supplied by the user
+      ignore_case: bool for if the newly compiled regexps should ignore case.
+    Raises:
+      ValueError if a regexp is not valid.
+    Returns:
+      Tuple of lists to use in matching operations.
+    """
+
+    literal_match = []
+    re_match = []
+    for filter_item in filter_string.split(','):
+      # Spaces have no meaning, as filters never have spaces in them.
+      filter_item = filter_item.strip()
+      if filter_item:
+        if filter_item.startswith('^'):
+          # Add implicit '$' to regexp.
+          if not filter_item.endswith('$'):
+            filter_item += '$'
+          try:
+            # Filter expressions are case insensitive.
+            if ignore_case:
+              re_match.append(re.compile(filter_item, re.IGNORECASE))
+            else:
+              re_match.append(re.compile(filter_item))
+          except re.error:
+            raise ValueError('Argument regexp %r is invalid' % filter_item)
+        else:
+          if ignore_case:
+            literal_match.append(filter_item.lower())
+          else:
+            literal_match.append(filter_item)
+
+    return (literal_match, re_match)
+  
+  def Match(self, attr: str, attr_value: str | list[str] | list[list[str]]) -> bool:
+    """Returns if a attribute value matches the corresponding filter."""
+
+    # If we have a list of attributes, recurse down to find match.
+    # This might be the case if matching the presence of a Flag.
+    if isinstance(attr_value, list):
+      for attr_elem in attr_value:
+        if self.Match(attr, attr_elem):
+          return True
+      return False
+
+    # Is there this attribute, is it set and does it match?
+    if (attr in self._literals_filter and self._literals_filter[attr] and
+        attr_value in self._literals_filter[attr]):
+      return True
+    
+    # Regular expressions are held separately as compiled expressions.
+    if attr in self._compiled_filter:
+      for regexp in self._compiled_filter[attr]:
+        if regexp.match(attr_value):
+          return True
+        
+    return False

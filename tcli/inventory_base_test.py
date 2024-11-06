@@ -158,16 +158,16 @@ class InventoryBaseTest(unittest.TestCase):
     # Changing realm or vendor updates the appropriate filter.
     self.inv._CmdFilter('realm', ['lab'], False)
     self.assertEqual(self.inv._inclusions['realm'], 'lab')
-    self.assertEqual(self.inv._literals_filter['realm'], ['lab'])
+    self.assertEqual(self.inv._filters._literals_filter['realm'], ['lab'])
 
     self.inv._CmdFilter('vendor', ['juniper'], False)
     self.assertEqual(self.inv._inclusions['vendor'], 'juniper')
-    self.assertEqual(self.inv._literals_filter['vendor'], ['juniper'])
+    self.assertEqual(self.inv._filters._literals_filter['vendor'], ['juniper'])
 
     # prepend with an 'x' to update the exclusions.
     self.inv._CmdFilter('xvendor', ['cisco'], False)
     self.assertEqual(self.inv._exclusions['xvendor'], 'cisco')
-    self.assertEqual(self.inv._literals_filter['xvendor'], ['cisco'])
+    self.assertEqual(self.inv._filters._literals_filter['xvendor'], ['cisco'])
 
   def testChangeDeviceList(self):
     """Tests changing specific filters."""
@@ -288,10 +288,10 @@ class InventoryBaseTest(unittest.TestCase):
     """Test deriving the compiled/literal filters from the string."""
 
     # Filtering is split into literals and regexp entries
-    (literals, re_match) = self.inv._DecomposeFilter('a,b,^c')
+    (literals, re_match) = self.inv._filters.DecomposeFilter('a,b,^c')
     self.assertEqual((literals, [x.pattern for x in re_match]),
                      (['a', 'b'], ['^c$']))
-    (literals, re_match) = self.inv._DecomposeFilter('^a.*,b,^c$,d,e')
+    (literals, re_match) = self.inv._filters.DecomposeFilter('^a.*,b,^c$,d,e')
     self.assertEqual((literals, [x.pattern for x in re_match]),
                      (['b', 'd', 'e'], ['^a.*$', '^c$']))
 
