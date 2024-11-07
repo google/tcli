@@ -799,7 +799,7 @@ class TCLI(object):
       logging.debug("Callback for '%s'.", response.uid)
       # Convert from inventory specific format to a more generic dictionary.
       self.cmd_response.AddResponse(
-          self.inventory.ReformatCmdResponse(response))
+          self.inventory.CmdResponsePresentation(response))
 
       # If we have all responses for current row/command then display.
       row = self.cmd_response.GetRow()
@@ -848,7 +848,7 @@ class TCLI(object):
 
       # Create command requests.
       for host in device_list:
-        req = self.inventory.CreateCmdRequest(host, command, self.mode)
+        req = self.inventory.CmdRequestPresentation(host, command, self.mode)
         # Track the order that commands are submitted.
         # Responses are received in any order and
         # we use the row ID to reassemble.
