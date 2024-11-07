@@ -172,17 +172,16 @@ class Inventory(object):
     """Initialise thread safe access to data to support async calls."""
 
     # Devices keyed on device name.
-    # Each value is a dictionary of attribute/value pairs.
     # If we have already loaded the devices, don't do it again.
     if not hasattr(self, '_devices'):
       self._devices = {}
     # List of device names.
     self._device_list = None
+    self._filters = {}
     self._lock = threading.Lock()
     self._devices_loaded = threading.Event()
     self._devices_loaded.set()
     self._maxtargets = FLAGS.maxtargets
-    self._filters = AttributeFilter()
 
     # Filters and exclusions added by this library.
     # We always have "targets", which is matched against the device name.
@@ -422,16 +421,32 @@ class Inventory(object):
       filters = self._exclusions
       caps = 2
 
+    # No args, so display current value/s.
     if not args:
       return self._FormatLabelAndValue(
           command_name, filters[command_name], caps=caps)
 
-    filter_string = args[0]   # TDOD(harro): Raise exception is args >1 ?
+    filter_string = args[0]   # TODO(harro): Raise exception is args >1 ?
+    if filter_string in ('^', '^$'):
+      del(self._filters[command_name])
+      filters[command_name] = ''
+      # Clear device list to trigger re-application of filter.
+      self._device_list = None
+      return ''
     # Appending a new filter string to an existing filter.
     if append and filter_string and filters[command_name]:
       filter_string = ','.join([filters[command_name], filter_string])
     #TDOD(harro): Replace _ChangeFilter with _AttributeFilter.
-    filters[command_name] = self._ChangeFilter(command_name, filter_string)
+    _filter = AttributeFilter()
+    _filter.Set(filter_string)
+    if not self.ValidFilter(command_name, _filter.Get()[0]):
+      raise ValueError(
+        'Non-regexp filter entry "%s" is not valid.' % _filter.Get()[0])
+
+    self._filters[command_name] = _filter
+    filters[command_name] = filter_string
+    # Clear device list to trigger re-application of filter.
+    self._device_list = None
     return ''
 
   def _AttributeFilter(self, command_name: str, args: list[str], append=False) -> str:
@@ -506,7 +521,7 @@ class Inventory(object):
       else:
         yield i
 
-  def _ChangeFilter(self, filter_name, arg):
+  def ValidFilter(self, filter_name, literals):
     """Update inventory filter.
 
     Sets the new value for the filter string. Only called against valid
@@ -514,55 +529,43 @@ class Inventory(object):
 
     Args:
       filter_name: str filter or exclusion name.
-      arg: str new value for filter.
+      literals: list of literals in the filter.
     Raises:
       ValueError: If literal device name specified and device is unknown.
     Returns:
-      The filter string 'arg'.
+      Bool The filter string 'arg'.
     """
 
-    # Clearing a filter requires no content validation.
-    if not arg or arg in ('^', '^$'):
-      arg = ''
-      (literals, compiled) = (None, None)
+    #TODO(harro): Add support for regexp validation.
+    if not literals: return True
+    
+    attribute = filter_name
+    # Trim off the 'x' prefix for matching exclusions against attributes.
+    if filter_name.startswith('x'):
+      attribute = filter_name[1 :]
+
+    if attribute == 'targets':
+      # Warn user if literal is unknown.
+      validate_list = self._GetDevices()
+
+    elif (attribute in DEVICE_ATTRIBUTES and
+          DEVICE_ATTRIBUTES[attribute].valid_values):
+      validate_list = DEVICE_ATTRIBUTES[attribute].valid_values
     else:
-      # Split the string into literal and regexp elements.
-      # Filter matching is case insensitive.
-      (literals, compiled) = self._filters.DecomposeFilter(arg, ignore_case=True)
+      # Without a specific list of valid values, check that at least one
+      # device matches.
+      # TODO(harro): For filter responsiveness reasons we may drop this.
+      validate_list = [getattr(dev, attribute, None)
+                        for dev in self._GetDevices().values()]
+      validate_list = set(self._Flatten(validate_list))
 
-      if literals:
-        attribute = filter_name
-        # Trim off the 'x' prefix for matching exclusions against attributes.
-        if filter_name.startswith('x'):
-          attribute = attribute[1 :]
+    validate_list = [value.lower() for value in validate_list]
 
-        if attribute == 'targets':
-          # Warn user if literal is unknown.
-          validate_list = self._GetDevices()
-
-        elif (attribute in DEVICE_ATTRIBUTES and
-              DEVICE_ATTRIBUTES[attribute].valid_values):
-          validate_list = DEVICE_ATTRIBUTES[attribute].valid_values
-        else:
-          # Without a specific list of valid values, check that at least one
-          # device matches.
-          # TODO(harro): For filter responsiveness reasons we may drop this.
-          validate_list = [getattr(dev, attribute, None)
-                           for dev in self._GetDevices().values()]
-          validate_list = set(self._Flatten(validate_list))
-
-        validate_list = [value.lower() for value in validate_list]
-
-        # Confirm that static content matches a valid entry.
-        unmatched_literals = set(literals).difference(set(validate_list))
-        if unmatched_literals:
-          raise ValueError('Non-regexp filter entry "%s" is not valid.' %
-                           unmatched_literals)
-
-    self._filters.SetFilters(filter_name, literals, compiled)
-    # Clear device list to trigger re-application of filter.
-    self._device_list = None
-    return arg
+    # Confirm that static content matches a valid entry.
+    unmatched_literals = set(literals).difference(set(validate_list))
+    if unmatched_literals:
+      return False
+    return True
 
   def _FormatLabelAndValue(self, label, value, caps=1):
     """Returns string with capitilized label and corresponding value."""
@@ -637,7 +640,10 @@ class Inventory(object):
         if not attr_value:
           continue
 
-      matched = self._filters.Match(attr, attr_value)
+      if attr not in self._filters: 
+        matched = False
+      else:
+        matched = self._filters[attr].Match(attr_value)
       # For exclusion, exclude as soon as one matches.
       if exclude:
         if matched:
@@ -663,7 +669,7 @@ class Inventory(object):
     """
 
     self._device_list = []
-    # Special case, a null targets expression doesn't match any devices.
+    # Special case, a null 'targets' expression doesn't match any devices.
     if not self._inclusions['targets']:
       return self._device_list
 
@@ -733,39 +739,40 @@ class Inventory(object):
     raise NotImplementedError
 
 class AttributeFilter(object):
-  """Commands and data for matching attribute filters against devices."""
+  """Filter string decomposition and matching against values."""
 
   def __init__(self):
-    # Store literal strings and compiled regexps in separate dictionaries.
-    # Use to accelerate matching against regular expressions.
-    self._literals_filter = {}
-    self._compiled_filter = {}
+    # Literal strings and compiled regexps keyed on attribute name.
+    self._literals = {}
+    self._compiled = {}
 
-  def SetFilters(self, filter_name, literals, compiled):
+  def Set(self, filter_string):
     """Assigns values to filters.
 
     Store the literal values and compiled regular expressions in respective
     dictionaries.
 
     Args:
-      filter_name: str filter or exclusion name.
-      literals: list of strings that represent individual matches.
-      compiled: List of compiled regular expressions to match.
+      filter_string: str to use as a filter.
     """
 
-    # Shared dictionaries for filters and exclusions.
-    self._literals_filter[filter_name] = literals
-    self._compiled_filter[filter_name] = compiled
+    # Split the string into literal and regexp elements.
+    # Filter matching is case insensitive.
+    (self._literals, self._compiled) = self.DecomposeString(
+      filter_string, ignore_case=True)
+  
+  def Get(self):
+    return (self._literals, self._compiled)
 
-  def DecomposeFilter(self, filter_string, ignore_case=False):
+  def DecomposeString(self, filter_string, ignore_case=False):
     """Returns a tuple of compiled and literal lists.
 
     For attributes names, they are case insensitive so the compiled
     regular expressions ignores case.
 
     Args:
-      filter_string: str filter supplied by the user
-      ignore_case: bool for if the newly compiled regexps should ignore case.
+      filter_string: str to use as a filter.
+      ignore_case: bool for if compiled regexps should ignore case.
     Raises:
       ValueError if a regexp is not valid.
     Returns:
@@ -798,26 +805,25 @@ class AttributeFilter(object):
 
     return (literal_match, re_match)
   
-  def Match(self, attr: str, attr_value: str | list[str] | list[list[str]]) -> bool:
-    """Returns if a attribute value matches the corresponding filter."""
+  def Match(self, value: str | list[str] | list[list[str]]) -> bool:
+    """Returns if a value matches the filter."""
 
     # If we have a list of attributes, recurse down to find match.
     # This might be the case if matching the presence of a Flag.
-    if isinstance(attr_value, list):
-      for attr_elem in attr_value:
-        if self.Match(attr, attr_elem):
+    if isinstance(value, list):
+      for attr_elem in value:
+        if self.Match(attr_elem):
           return True
       return False
 
     # Is there this attribute, is it set and does it match?
-    if (attr in self._literals_filter and self._literals_filter[attr] and
-        attr_value in self._literals_filter[attr]):
+    if (self._literals and value in self._literals):
       return True
-    
+
     # Regular expressions are held separately as compiled expressions.
-    if attr in self._compiled_filter:
-      for regexp in self._compiled_filter[attr]:
-        if regexp.match(attr_value):
+    if self._compiled:
+      for regexp in self._compiled:
+        if regexp.match(value):
           return True
-        
+
     return False

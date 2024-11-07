@@ -23,10 +23,10 @@ from tcli import inventory_base
 
 class InventoryBaseTest(unittest.TestCase):
 
-  def _ClearFilters(self):
+  def _ClearFilters(self, inv_obj):
     """Clear all filters for targets etc."""
-    for x in self.inv._inclusions: self.inv._inclusions[x] = ''
-    for y in self.inv._exclusions: self.inv._exclusions[y] = ''
+    for x in inv_obj._inclusions: inv_obj._inclusions[x] = ''
+    for y in inv_obj._exclusions: inv_obj._exclusions[y] = ''
 
   @classmethod
   def setUpClass(cls):
@@ -55,7 +55,7 @@ class InventoryBaseTest(unittest.TestCase):
     self.dev_inv_orig = inventory_base.DEVICE_ATTRIBUTES
     self.inv = inventory_base.Inventory()
     self.inv.LoadDevices()
-    self._ClearFilters()
+    self._ClearFilters(self.inv)
 
   def tearDown(self):
     inventory_base.DEVICE_ATTRIBUTES = self.dev_inv_orig
@@ -158,16 +158,16 @@ class InventoryBaseTest(unittest.TestCase):
     # Changing realm or vendor updates the appropriate filter.
     self.inv._CmdFilter('realm', ['lab'], False)
     self.assertEqual(self.inv._inclusions['realm'], 'lab')
-    self.assertEqual(self.inv._filters._literals_filter['realm'], ['lab'])
+    self.assertEqual(self.inv._filters['realm'].Get()[0], ['lab'])
 
     self.inv._CmdFilter('vendor', ['juniper'], False)
     self.assertEqual(self.inv._inclusions['vendor'], 'juniper')
-    self.assertEqual(self.inv._filters._literals_filter['vendor'], ['juniper'])
+    self.assertEqual(self.inv._filters['vendor'].Get()[0], ['juniper'])
 
     # prepend with an 'x' to update the exclusions.
     self.inv._CmdFilter('xvendor', ['cisco'], False)
     self.assertEqual(self.inv._exclusions['xvendor'], 'cisco')
-    self.assertEqual(self.inv._filters._literals_filter['xvendor'], ['cisco'])
+    self.assertEqual(self.inv._filters['xvendor'].Get()[0], ['cisco'])
 
   def testChangeDeviceList(self):
     """Tests changing specific filters."""
@@ -236,14 +236,14 @@ class InventoryBaseTest(unittest.TestCase):
     self.inv._CmdFilter('targets', ['^$'])
     self.assertListEqual(self.inv.device_list, [])
 
-    self._ClearFilters()
+    self._ClearFilters(self.inv)
     self.inv._CmdFilter('targets', ['^.*'])
     self.inv._CmdFilter('realm', ['^prod|lab'])
     self.assertListEqual(self.inv.device_list, 
                          ['device01', 'device02', 'device03', 'device04'])
     
     # Use the attributes indirect command rather than the 'targets' et al.
-    self._ClearFilters()
+    self._ClearFilters(self.inv)
     self.inv._AttributeFilter('attributes', ['targets', 'device01'])
     self.assertListEqual(self.inv.device_list, ['device01'])
 
@@ -254,24 +254,6 @@ class InventoryBaseTest(unittest.TestCase):
     # Remove both these devices based on vendor.
     self.inv._AttributeFilter('xattributes', ['vendor', 'juniper'])
     self.assertListEqual(self.inv.device_list, [])
-
-
-  def testChangeFilter(self):
-    """Tests making changes to various target filters."""
-
-    # '^' clears filter.
-    self.assertEqual(self.inv._ChangeFilter('pop', '^'), '')
-    # Mix of literal and regexp values for various attributes.
-    self.assertEqual(self.inv._ChangeFilter('pop', 'abc01,^xyz'), 'abc01,^xyz')
-    self.assertEqual(self.inv._ChangeFilter('pop', '^'), '')
-    self.assertEqual(self.inv._ChangeFilter('realm', 'lab,^xyz\\d\\d'),
-                     'lab,^xyz\\d\\d')
-    self.assertEqual(self.inv._ChangeFilter('xvendor', 'cisco,^xyz'), 
-                     'cisco,^xyz')
-  
-    self.assertRaises(ValueError, self.inv._ChangeFilter, 'vendor', 'bogus')
-    self.assertRaises(
-      ValueError, self.inv._ChangeFilter,'xvendor', 'bogus,^xyz')
 
   def testFormatLabelAndValue(self):
     """Tests formatting attribute: value'' displayed."""
@@ -287,11 +269,12 @@ class InventoryBaseTest(unittest.TestCase):
   def testDecomposeFilter(self):
     """Test deriving the compiled/literal filters from the string."""
 
+    _filter = inventory_base.AttributeFilter()
     # Filtering is split into literals and regexp entries
-    (literals, re_match) = self.inv._filters.DecomposeFilter('a,b,^c')
+    (literals, re_match) = _filter.DecomposeString('a,b,^c')
     self.assertEqual((literals, [x.pattern for x in re_match]),
                      (['a', 'b'], ['^c$']))
-    (literals, re_match) = self.inv._filters.DecomposeFilter('^a.*,b,^c$,d,e')
+    (literals, re_match) = _filter.DecomposeString('^a.*,b,^c$,d,e')
     self.assertEqual((literals, [x.pattern for x in re_match]),
                      (['b', 'd', 'e'], ['^a.*$', '^c$']))
 
