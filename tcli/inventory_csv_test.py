@@ -110,9 +110,11 @@ class UnitTestCSVInventory(unittest.TestCase):
     """Tests loading device inventory from CSV via the base class method."""
     self.inv._devices = {}
     self.inv.LoadDevices()
+    # Load is async so we wait for it to complete before testing outcome.
+    self.inv._devices_loaded.wait()
     self.assertTrue(self.inv._devices)
 
-  def testReformatCmdResponse(self):
+  def testCmdResponsePresentation(self):
     """Tests Formatting of response into name value pairs in a dictionary."""
 
     response = inventory.inventory_base.CmdResponse(
@@ -123,7 +125,7 @@ class UnitTestCSVInventory(unittest.TestCase):
       error=''
     )
     # No-op, so we test that nothing has changed.
-    self.assertTupleEqual(self.inv.ReformatCmdResponse(response), response)
+    self.assertTupleEqual(self.inv.CmdResponsePresentation(response), response)
 
   def testSendRequests(self):
     """Tests command requests are pulled from file."""

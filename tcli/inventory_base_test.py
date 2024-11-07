@@ -64,16 +64,16 @@ class InventoryBaseTest(unittest.TestCase):
   # Thread safe public methods and properties.                               #
   ############################################################################
   
-  def testCreateCmdRequest(self):
+  def testCmdRequestPresentation(self):
     """Test building commands requests to send to device connection service."""
 
     self.inv.CmdRequest.UID = 0
-    request = self.inv.CreateCmdRequest('device01', 'show vers', 'cli')
+    request = self.inv.CmdRequestPresentation('device01', 'show vers', 'cli')
     self.assertEqual('device01', request.target)
     self.assertEqual('show vers', request.command)
     self.assertEqual('cli', request.mode)
     self.assertEqual(1, request.uid)
-    request = self.inv.CreateCmdRequest('device02', 'show vers', 'shell')
+    request = self.inv.CmdRequestPresentation('device02', 'show vers', 'shell')
     self.assertEqual('device02', request.target)
     self.assertEqual('shell', request.mode)
 
@@ -305,12 +305,19 @@ class AttributeFilterTest(unittest.TestCase):
     self.assertFalse(_filter.Match('World'))  # Match on only lowercase.
     self.assertTrue(_filter.Match('beehive'))
     self.assertTrue(_filter.Match('Beehive')) # Regexp case insensitive
+
+    # Flip the ignorecase logic.
     _filter = inventory_base.FilterMatch('hello, World, ^b.*', False)
     self.assertTrue(_filter.Match('hello'))
     self.assertFalse(_filter.Match('world'))  # No cononical form, match as is.
     self.assertTrue(_filter.Match('World'))
     self.assertTrue(_filter.Match('beehive'))
     self.assertFalse(_filter.Match('Beehive'))  # Case matters.
+
+    _filter = inventory_base.FilterMatch('f1, ^d.*')
+    self.assertTrue(_filter.Match(['f1', 'f2', 'f3']))
+    self.assertFalse(_filter.Match(['a', 'b', 'c']))
+    self.assertTrue(_filter.Match(['d1', 'd2', 'd3']))
 
 if __name__ == '__main__':
   unittest.main()

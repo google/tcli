@@ -157,19 +157,16 @@ class Inventory(object):
   SOURCE = 'unknown'
 
   class CmdRequest(object):
-    """Holds a request named dictionary and wrapped with a uid."""
+    """Request object to be sent to the external device accessor service."""
 
-    # Data format similar to:
-    # CmdRequest = collections.namedtuple(
-    #   'CmdRequest', ['uid', 'target', 'command', 'mode'])
     UID = 0    # Each request has an identifier
 
-    def __init__(self):
+    def __init__(self, target: str, command: str, mode: str='cli') -> None:
       Inventory.CmdRequest.UID += 1
       self.uid = Inventory.CmdRequest.UID
-      self.target = ''
-      self.command = ''
-      self.mode = ''
+      self.target = target
+      self.command = bytes(command, 'utf-8').decode('unicode_escape')
+      self.mode = mode
 
   def __init__(self):
     """Initialise thread safe access to data to support async calls."""
@@ -182,6 +179,7 @@ class Inventory(object):
     self._device_list = None
     self._filters = {}
     self._lock = threading.Lock()
+    self._devices_lock = threading.Lock()
     self._devices_loaded = threading.Event()
     self._devices_loaded.set()
     self._maxtargets = FLAGS.maxtargets
@@ -205,7 +203,7 @@ class Inventory(object):
   # Thread safe public methods and properties.                               #
   ############################################################################
 
-  def CreateCmdRequest(self, target, command, mode):
+  def CmdRequestPresentation(self, target, command, mode):
     """Creates command request for sending to device manager.
 
     The command request object created should satisfy the format required
@@ -231,7 +229,7 @@ class Inventory(object):
       List of request objects.
     """
     with self._lock:
-      return self._CreateCmdRequest(target, command, mode)
+      return self._CmdRequestPresentation(target, command, mode)
 
   def GetDevices(self):
     """Loads Devices from external store.
@@ -270,7 +268,7 @@ class Inventory(object):
     with self._lock:
       self._LoadDevices()
 
-  def ReformatCmdResponse(self, response):
+  def CmdResponsePresentation(self, response):
     """Formats command response into name value pairs in a dictionary.
 
     The device manager specific format of the response is transformed into a
@@ -290,7 +288,7 @@ class Inventory(object):
     Returns:
       Dictionary representation of command response.
     """
-    return self._ReformatCmdResponse(response)
+    return self._CmdResponsePresentation(response)
 
   def RegisterCommands(self, cmd_register):
     """Add module specific command support to TCLI."""
@@ -670,12 +668,13 @@ class Inventory(object):
       ValueError: if size of device list exceeds max targets limit.
     """
 
-    self._device_list = []
-    # Special case, a null 'targets' expression doesn't match any devices.
+    # Special case, treatment of the null case for 'targets' is the inverse.
+    # In other words, a null 'targets' expression doesn't match any devices.
     if not self._inclusions['targets']:
+      self._device_list = []
       return self._device_list
 
-    device_list = []
+    d_list = []
     for (devicename, d) in self._GetDevices().items():
       # Skip devices that match any non-blank exclusions.
       if self._FilterMatch(devicename, d, exclude=True):
@@ -683,21 +682,27 @@ class Inventory(object):
 
       # Include devices that match all filters (blank is a match).
       if self._FilterMatch(devicename, d):
-        device_list.append(devicename)
+        d_list.append(devicename)
 
-    if self._maxtargets and len(device_list) > self._maxtargets:
+    # Raise error if number of matches exceeds the maximum set by user.
+    if self._maxtargets and len(d_list) > self._maxtargets:
       raise ValueError('Target list exceeded Maximum targets limit of: %s.' %
                        self._maxtargets)
 
     # Cache the result.
-    self._device_list = device_list
+    self._device_list = d_list
     logging.debug('Device List length: %d', len(self._device_list))
     return self._device_list
 
-  def _AsyncBuildDeviceData(self) -> None:
+  def _AsyncFetchDevices(self) -> None:
+    """Wrapper for calling FetchDevices from withing a thread."""
+
+    # Threading here is helpful if device inventory is large.
     try:
       self._FetchDevices()
     finally:
+      self._devices_lock.release()
+      # Let pending getters know the data is ready.
       self._devices_loaded.set()
 
   def _FetchDevices(self) -> None|NotImplementedError:
@@ -705,16 +710,17 @@ class Inventory(object):
 
     raise NotImplementedError
 
+  #TODO(harro): Add timeout ... maybe 5min? With user setting.
   def _LoadDevices(self) -> None:
     """Loads Devices from external store."""
 
-    # Wait for any pending load to complete.
-    self._devices_loaded.wait()
+    # Block additional requests until completed.
+    self._devices_lock.acquire()
     # Block reads of the devices until loaded.
     self._devices_loaded.clear()
     # Collect result in a thread so it can complete in the background.
     self._devices_thread = threading.Thread(name='Device loader',
-                                            target=self._AsyncBuildDeviceData,
+                                            target=self._AsyncFetchDevices,
                                             daemon=True)
     self._devices_thread.start()
 
@@ -722,19 +728,18 @@ class Inventory(object):
   # Methods related to sending commands and receiving responses from devices. #
   #############################################################################
 
-  def _CreateCmdRequest(self, target, command, mode) -> CmdRequest:
+  def _CmdRequestPresentation(
+      self, target: str, command: str, mode: str) -> CmdRequest:
     """Creates command request for Device Accessor."""
 
-    request = self.CmdRequest()
-    request.target = target
-    request.command = bytes(command, 'utf-8').decode('unicode_escape')
-    request.mode = mode
+    # Presentation layer for outgoing requests to the external device manager.
     logging.debug("Built Cmd Request: '%s' for host: '%s'.", command, target)
-    return request
+    return self.CmdRequest(target, command, mode)
 
-  def _ReformatCmdResponse(self, response: CmdResponse):
+  def _CmdResponsePresentation(self, response: object) -> CmdResponse:
     """Formats command response into name value pairs in a dictionary."""
 
+    # Presentation layer for incoming responses from external devic service.
     # Command response message format:
     # {
     #   'uid' : Unique identifier for command
@@ -746,14 +751,15 @@ class Inventory(object):
     # }
     raise NotImplementedError
 
-  def _SendRequests(self, requests_callbacks, deadline=None):
+  def _SendRequests(
+      self, requests_callbacks: tuple, deadline: float|None=None) -> None:
     """Submit command requests to device manager."""
     raise NotImplementedError
 
 class FilterMatch(object):
   """Object for filter string decomposition and matching against values."""
 
-  def __init__(self, filter_string, ignorecase=True):
+  def __init__(self, filter_string: str, ignorecase: bool=True) -> None:
     # Literal strings and compiled regexps keyed on attribute name.
     self._Set(filter_string, ignorecase)
 
@@ -761,7 +767,7 @@ class FilterMatch(object):
   def filters(self) -> tuple:
     return (self._literals, self._compiled)
 
-  def _Set(self, filter_string: str, ignore_case=True) -> None:
+  def _Set(self, filter_string: str, ignore_case: bool) -> None:
     """Assigns values to filters.
 
     Store the literal values and compiled regular expressions in their 
@@ -776,7 +782,7 @@ class FilterMatch(object):
       filter_string, ignore_case)
 
   def _DecomposeString(
-      self, filter_string: str, ignore_case: bool=False) -> tuple:
+      self, filter_string: str, ignore_case: bool) -> tuple:
     """Returns a tuple of lists of compiled and literal strings for matching.
 
     Args:
@@ -823,8 +829,8 @@ class FilterMatch(object):
     # If we have a list of attributes, recurse down to find match.
     # This might be the case if matching the presence of a Flag.
     if isinstance(value, list):
-      for attr_elem in value:
-        if self.Match(attr_elem):
+      for list_elem in value:
+        if self.Match(list_elem):
           return True
       return False
 
