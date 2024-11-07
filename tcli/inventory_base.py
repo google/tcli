@@ -242,7 +242,7 @@ class Inventory(object):
      ...
     }
     """
-  
+
     with self._lock:
       return self._GetDevices()
 
@@ -298,7 +298,7 @@ class Inventory(object):
                                  inline=True, short_name='A',
                                  handler=self._AttributeFilter,
                                  # TODO(harro): Change completer.
-                                 completer=self._CmdFilterCompleter) 
+                                 completer=self._CmdFilterCompleter)
     cmd_register.RegisterCommand('targets', TILDE_COMMAND_HELP['targets'],
                                  append=True, regexp=True, inline=True,
                                  short_name='T', default_value=FLAGS.targets,
@@ -408,7 +408,7 @@ class Inventory(object):
       ValueError: If called on unknown attribute.
     """
 
-    if not (command_name in self._inclusions or 
+    if not (command_name in self._inclusions or
             command_name in self._exclusions):
       raise ValueError('Command "%s" invalid.' % command_name)
 
@@ -436,12 +436,11 @@ class Inventory(object):
     # Appending a new filter string to an existing filter.
     if append and filter_string and filters[command_name]:
       filter_string = ','.join([filters[command_name], filter_string])
-    #TDOD(harro): Replace _ChangeFilter with _AttributeFilter.
-    _filter = AttributeFilter()
-    _filter.Set(filter_string)
-    if not self.ValidFilter(command_name, _filter.Get()[0]):
+    #TODO(harro): Pass in ignorecase flag, add to class __ini__.
+    _filter = FilterMatch(filter_string)
+    if not self.ValidFilter(command_name, _filter.filters[0]):
       raise ValueError(
-        'Non-regexp filter entry "%s" is not valid.' % _filter.Get()[0])
+        'Non-regexp filter entry "%s" is not valid.' % _filter.filters[0])
 
     self._filters[command_name] = _filter
     filters[command_name] = filter_string
@@ -538,7 +537,7 @@ class Inventory(object):
 
     #TODO(harro): Add support for regexp validation.
     if not literals: return True
-    
+
     attribute = filter_name
     # Trim off the 'x' prefix for matching exclusions against attributes.
     if filter_name.startswith('x'):
@@ -616,7 +615,7 @@ class Inventory(object):
     # 'None' means the list needs to be built first.
     if self._device_list is None: return self._BuildDeviceList()
     return self._device_list
-     
+
 
   def _FilterMatch(self, devicename: str, device_attrs: typing.NamedTuple,
                    exclude=False) -> bool:
@@ -628,7 +627,7 @@ class Inventory(object):
       # Blank filters are ignored.
       if not filter[attr]:
         continue
-      
+
       # For xtargets we match on device name as the attributes value.
       if attr == prefix + 'targets':
         attr_value = devicename
@@ -640,7 +639,7 @@ class Inventory(object):
         if not attr_value:
           continue
 
-      if attr not in self._filters: 
+      if attr not in self._filters:
         matched = False
       else:
         matched = self._filters[attr].Match(attr_value)
@@ -738,73 +737,73 @@ class Inventory(object):
     """Submit command requests to device manager."""
     raise NotImplementedError
 
-class AttributeFilter(object):
-  """Filter string decomposition and matching against values."""
+class FilterMatch(object):
+  """Object for filter string decomposition and matching against values."""
 
-  def __init__(self):
+  def __init__(self, filter_string, ignorecase=True):
     # Literal strings and compiled regexps keyed on attribute name.
-    self._literals = {}
-    self._compiled = {}
+    self._Set(filter_string, ignorecase)
 
-  def Set(self, filter_string):
+  @property
+  def filters(self) -> tuple:
+    return (self._literals, self._compiled)
+
+  def _Set(self, filter_string: str, ignore_case=True) -> None:
     """Assigns values to filters.
 
-    Store the literal values and compiled regular expressions in respective
-    dictionaries.
+    Store the literal values and compiled regular expressions in their 
+    respective dictionaries.
 
     Args:
-      filter_string: str to use as a filter.
+      filter_string: str to use as the basis of the filters.
     """
 
     # Split the string into literal and regexp elements.
-    # Filter matching is case insensitive.
-    (self._literals, self._compiled) = self.DecomposeString(
-      filter_string, ignore_case=True)
-  
-  def Get(self):
-    return (self._literals, self._compiled)
+    (self._literals, self._compiled) = self._DecomposeString(
+      filter_string, ignore_case)
 
-  def DecomposeString(self, filter_string, ignore_case=False):
-    """Returns a tuple of compiled and literal lists.
-
-    For attributes names, they are case insensitive so the compiled
-    regular expressions ignores case.
+  def _DecomposeString(
+      self, filter_string: str, ignore_case: bool=False) -> tuple:
+    """Returns a tuple of lists of compiled and literal strings for matching.
 
     Args:
-      filter_string: str to use as a filter.
-      ignore_case: bool for if compiled regexps should ignore case.
+      filter_string: str comma separated substrings to use for filtering.
+      ignore_case: bool to cononalise to lowercase or regexp ignores case.
     Raises:
-      ValueError if a regexp is not valid.
+      ValueError if a substring is indicated as a regexp but is not valid.
     Returns:
-      Tuple of lists to use in matching operations.
+      Tuple of lists to use in filtering operations.
     """
 
-    literal_match = []
-    re_match = []
-    for filter_item in filter_string.split(','):
-      # Spaces have no meaning, as filters never have spaces in them.
-      filter_item = filter_item.strip()
-      if filter_item:
-        if filter_item.startswith('^'):
+    literal_substrs, re_substrs = [], []
+    # Note we accept only a subset of RFC 4180 and do not support enclosing
+    # in double double quotes
+    # https://www.ietf.org/rfc/rfc4180.txt
+    for substring in filter_string.split(','):
+      # Trim excess space from around a substring..
+      substring = substring.strip()
+      if substring:
+        # regexp style matches always start with '^'.
+        if substring.startswith('^'):
           # Add implicit '$' to regexp.
-          if not filter_item.endswith('$'):
-            filter_item += '$'
+          if not substring.endswith('$'):
+            substring += '$'
           try:
-            # Filter expressions are case insensitive.
             if ignore_case:
-              re_match.append(re.compile(filter_item, re.IGNORECASE))
+              re_substrs.append(re.compile(substring, re.IGNORECASE))
             else:
-              re_match.append(re.compile(filter_item))
+              re_substrs.append(re.compile(substring))
           except re.error:
-            raise ValueError('Argument regexp %r is invalid' % filter_item)
+            raise ValueError('The filter regexp %r is invalid' % substring)
         else:
           if ignore_case:
-            literal_match.append(filter_item.lower())
+            # Canonalise to all lowercase.
+            literal_substrs.append(substring.lower())
           else:
-            literal_match.append(filter_item)
+            literal_substrs.append(substring)
 
-    return (literal_match, re_match)
-  
+    return (literal_substrs, re_substrs)
+
   def Match(self, value: str | list[str] | list[list[str]]) -> bool:
     """Returns if a value matches the filter."""
 
@@ -816,7 +815,7 @@ class AttributeFilter(object):
           return True
       return False
 
-    # Is there this attribute, is it set and does it match?
+    # Is there a literal for this value?
     if (self._literals and value in self._literals):
       return True
 

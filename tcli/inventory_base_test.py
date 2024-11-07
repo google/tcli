@@ -147,6 +147,15 @@ class InventoryBaseTest(unittest.TestCase):
     # Error
     self.assertRaises(ValueError, self.inv._CmdMaxTargets, command, ['-10'])
 
+  def testBuildDeviceListWithMaxTargets(self):
+    """Tests triggereing maximum target limit."""
+
+    self.inv._CmdFilter('targets', ['^device.*'])
+    # Limit not triggered by changing the value.
+    self.inv._maxtargets = 2
+    # Limit triggered when displaying new device list.
+    self.assertRaises(ValueError, self.inv.GetDeviceList)
+
   def testCmdHandlers(self):
     """Tests the extended handler."""
 
@@ -158,16 +167,16 @@ class InventoryBaseTest(unittest.TestCase):
     # Changing realm or vendor updates the appropriate filter.
     self.inv._CmdFilter('realm', ['lab'], False)
     self.assertEqual(self.inv._inclusions['realm'], 'lab')
-    self.assertEqual(self.inv._filters['realm'].Get()[0], ['lab'])
+    self.assertEqual(self.inv._filters['realm'].filters[0], ['lab'])
 
     self.inv._CmdFilter('vendor', ['juniper'], False)
     self.assertEqual(self.inv._inclusions['vendor'], 'juniper')
-    self.assertEqual(self.inv._filters['vendor'].Get()[0], ['juniper'])
+    self.assertEqual(self.inv._filters['vendor'].filters[0], ['juniper'])
 
     # prepend with an 'x' to update the exclusions.
     self.inv._CmdFilter('xvendor', ['cisco'], False)
     self.assertEqual(self.inv._exclusions['xvendor'], 'cisco')
-    self.assertEqual(self.inv._filters['xvendor'].Get()[0], ['cisco'])
+    self.assertEqual(self.inv._filters['xvendor'].filters[0], ['cisco'])
 
   def testChangeDeviceList(self):
     """Tests changing specific filters."""
@@ -262,30 +271,46 @@ class InventoryBaseTest(unittest.TestCase):
     self.assertEqual(self.inv._FormatLabelAndValue('abc', 'xyz', 2), 'ABc: xyz')
     self.assertEqual(self.inv._FormatLabelAndValue('abc', 'xyz', 4), 'ABC: xyz')
 
-  ############################################################################
-  # Methods related to building, managing and serving the device inventory.  #
-  ############################################################################
-  
+class AttributeFilterTest(unittest.TestCase):
   def testDecomposeFilter(self):
     """Test deriving the compiled/literal filters from the string."""
 
-    _filter = inventory_base.AttributeFilter()
+    (literals, re_match) = inventory_base.FilterMatch('a,b,^c').filters
     # Filtering is split into literals and regexp entries
-    (literals, re_match) = _filter.DecomposeString('a,b,^c')
     self.assertEqual((literals, [x.pattern for x in re_match]),
                      (['a', 'b'], ['^c$']))
-    (literals, re_match) = _filter.DecomposeString('^a.*,b,^c$,d,e')
+    (literals, re_match) = inventory_base.FilterMatch(
+      '^a.*,b,^c$,d,e').filters
     self.assertEqual((literals, [x.pattern for x in re_match]),
                      (['b', 'd', 'e'], ['^a.*$', '^c$']))
+    (literals, re_match) = inventory_base.FilterMatch(
+      '^a.*,b,  ^c$, d , "e"').filters
+    self.assertEqual((literals, [x.pattern for x in re_match]),
+                     (['b', 'd', '"e"'], ['^a.*$', '^c$']))
+    (literals, re_match) = inventory_base.FilterMatch(
+      '^A.*,B,  ^C$, D , "E"').filters
+    # Ignorecase, literals are changed to lowercase. Regexp are unchanged.
+    self.assertEqual((literals, [x.pattern for x in re_match]),
+                     (['b', 'd', '"e"'], ['^A.*$', '^C$']))
+    # Bogus regular expressions raise an error.
+    self.assertRaises(ValueError, inventory_base.FilterMatch, '^A.**')
+    self.assertRaises(ValueError, inventory_base.FilterMatch, '^[A')
 
-  def testBuildDeviceListWithMaxTargets(self):
-    """Tests triggereing maximum target limit."""
+  def testMatch(self):
+    """Tests matching logic against filter substrings."""
 
-    self.inv._CmdFilter('targets', ['^device.*'])
-    # Limit not triggered by changing the value.
-    self.inv._maxtargets = 2
-    # Limit triggered when displaying new device list.
-    self.assertRaises(ValueError, self.inv.GetDeviceList)
+    _filter = inventory_base.FilterMatch('hello, World, ^b.*')
+    self.assertTrue(_filter.Match('hello'))
+    self.assertTrue(_filter.Match('world'))   # Cononical form is lowercase.
+    self.assertFalse(_filter.Match('World'))  # Match on only lowercase.
+    self.assertTrue(_filter.Match('beehive'))
+    self.assertTrue(_filter.Match('Beehive')) # Regexp case insensitive
+    _filter = inventory_base.FilterMatch('hello, World, ^b.*', False)
+    self.assertTrue(_filter.Match('hello'))
+    self.assertFalse(_filter.Match('world'))  # No cononical form, match as is.
+    self.assertTrue(_filter.Match('World'))
+    self.assertTrue(_filter.Match('beehive'))
+    self.assertFalse(_filter.Match('Beehive'))  # Case matters.
 
 if __name__ == '__main__':
   unittest.main()
