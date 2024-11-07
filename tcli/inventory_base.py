@@ -84,7 +84,6 @@ DEVICE_ATTRIBUTES = {}
 # The single device entry in the inventory. Set in child module.
 DEVICE = None
 
-# TODO(harro): Define CmdRequest here too?
 # Data format of response.
 CmdResponse = collections.namedtuple(
     'CmdResponse', ['uid', 'device_name', 'command', 'data', 'error'])
@@ -157,13 +156,17 @@ class Inventory(object):
   """
   SOURCE = 'unknown'
 
-  class Request(object):
+  class CmdRequest(object):
     """Holds a request named dictionary and wrapped with a uid."""
+
+    # Data format similar to:
+    # CmdRequest = collections.namedtuple(
+    #   'CmdRequest', ['uid', 'target', 'command', 'mode'])
     UID = 0    # Each request has an identifier
 
     def __init__(self):
-      Inventory.Request.UID += 1
-      self.uid = Inventory.Request.UID
+      Inventory.CmdRequest.UID += 1
+      self.uid = Inventory.CmdRequest.UID
       self.target = ''
       self.command = ''
       self.mode = ''
@@ -719,18 +722,28 @@ class Inventory(object):
   # Methods related to sending commands and receiving responses from devices. #
   #############################################################################
 
-  def _CreateCmdRequest(self, target, command, mode):
+  def _CreateCmdRequest(self, target, command, mode) -> CmdRequest:
     """Creates command request for Device Accessor."""
 
-    request = self.Request()
+    request = self.CmdRequest()
     request.target = target
     request.command = bytes(command, 'utf-8').decode('unicode_escape')
     request.mode = mode
     logging.debug("Built Cmd Request: '%s' for host: '%s'.", command, target)
     return request
 
-  def _ReformatCmdResponse(self, response):
+  def _ReformatCmdResponse(self, response: CmdResponse):
     """Formats command response into name value pairs in a dictionary."""
+
+    # Command response message format:
+    # {
+    #   'uid' : Unique identifier for command
+    #   'device_name': Device name string
+    #   'device': Corresponding entry for the device in the device inventory.
+    #   'command': Command string issued to device
+    #   'data': Command response string, null if error string populated.
+    #   'error': Optional error message string
+    # }
     raise NotImplementedError
 
   def _SendRequests(self, requests_callbacks, deadline=None):

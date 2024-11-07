@@ -67,7 +67,7 @@ class InventoryBaseTest(unittest.TestCase):
   def testCreateCmdRequest(self):
     """Test building commands requests to send to device connection service."""
 
-    self.inv.Request.UID = 0
+    self.inv.CmdRequest.UID = 0
     request = self.inv.CreateCmdRequest('device01', 'show vers', 'cli')
     self.assertEqual('device01', request.target)
     self.assertEqual('show vers', request.command)

@@ -217,19 +217,11 @@ class Inventory(inventory_base.Inventory):
   # Methods related to sending commands and receiving responses from devices.#
   ############################################################################
 
-  def _ReformatCmdResponse(self, response):
+  def _ReformatCmdResponse(self, response) -> inventory_base.CmdResponse:
     """Formats command response into name value pairs in a dictionary.
 
     The device manager specific format of the response is transformed into a
     more generic dictionary format:
-
-      {
-        'device_name': Device name string
-        'device': Corresponding entry for the device in the device inventory.
-        'command': Command string issued to device
-        'error': Optional error message string
-        'data': Command response string, null if error string populated.
-      }
 
     Args:
       response: device manager response object for a single device with a
@@ -238,6 +230,16 @@ class Inventory(inventory_base.Inventory):
       Dictionary representation of command response.
     """
 
+    # Command response message format:
+    # {
+    #   'uid' : Unique identifier for command
+    #   'device_name': Device name string
+    #   'device': Corresponding entry for the device in the device inventory.
+    #   'command': Command string issued to device
+    #   'data': Command response string, null if error string populated.
+    #   'error': Optional error message string
+    # }
+  
     # No-Op as response if already formatted correctly by _SendRequests.
     return response
 
@@ -249,15 +251,6 @@ class Inventory(inventory_base.Inventory):
       # Effective in cases where device access is controlled by a service.
       # Here we simply open a file with canned responses and return them
       # iteratively.
-      # Command response message format:
-      # {
-      #   'uid' : Unique identifier for command
-      #   'device_name': Device name string
-      #   'device': Corresponding entry for the device in the device inventory.
-      #   'command': Command string issued to device
-      #   'error': Optional error message string
-      #   'data': Command response string, null if error string populated.
-      # }
 
       # Rather than canned responses, users should make use of a device accessor
       # library such as:
