@@ -182,7 +182,7 @@ class Inventory(object):
       # Load device inventory from external source.
       self.Load()
     # List of device names.
-    self._device_list = None
+    self._device_list: None|list[str] = None
     self._filters = {}
     self._maxtargets = FLAGS.maxtargets
 
@@ -409,7 +409,7 @@ class Inventory(object):
 
     if not (command_name in self._inclusions or
             command_name in self._exclusions):
-      raise ValueError('Command "%s" invalid.' % command_name)
+      raise ValueError(f'Command "{command_name}" invalid.')
 
     # Filter may be inclusive, or exclusive.
     if command_name in self._inclusions:
@@ -439,7 +439,7 @@ class Inventory(object):
     _filter = FilterMatch(filter_string)
     if not self.ValidFilter(command_name, _filter.filters[0]):
       raise ValueError(
-        'Non-regexp filter entry "%s" is not valid.' % _filter.filters[0])
+        f'Non-regexp filter entry "{_filter.filters[0]}" is not valid.')
 
     self._filters[command_name] = _filter
     filters[command_name] = filter_string
@@ -503,7 +503,7 @@ class Inventory(object):
       if maxtargets < 0:
         raise ValueError
     except ValueError:
-      raise ValueError('Max Targets is a non-cardinal value: "%s"' % maxtargets)
+      raise ValueError(f'Max Targets is a non-cardinal value: "{maxtargets}."')
 
     self._maxtargets = maxtargets
     return ''
@@ -545,7 +545,6 @@ class Inventory(object):
     if attribute == 'targets':
       # Warn user if literal is unknown.
       validate_list = self._GetDevices()
-
     elif (attribute in DEVICE_ATTRIBUTES and
           DEVICE_ATTRIBUTES[attribute].valid_values):
       validate_list = DEVICE_ATTRIBUTES[attribute].valid_values
@@ -561,36 +560,35 @@ class Inventory(object):
 
     # Confirm that static content matches a valid entry.
     unmatched_literals = set(literals).difference(set(validate_list))
-    if unmatched_literals:
-      return False
-    return True
+    return False if unmatched_literals else True
+      
 
   def _FormatLabelAndValue(self, label, value, caps=1):
-    """Returns string with capitilized label and corresponding value."""
+    """Returns string with titlecase label and corresponding value."""
 
-    if caps > len(label):
-      caps = len(label)
-    label = label[0:caps].upper() + label[caps :]
-    return '%s: %s' % (label, value)
+    caps = min(caps, len(label))
+    # Capitalise the prefix.
+    label = label[:caps].upper() + label[caps :]
+    return f'{label}: {value}'
 
   def _ShowEnv(self):
     """Extends show environment to display filters and exclusions."""
 
-    indent = '  '
+    indent = ' '*2
     # Add headline to indicate this display section is from this module.
     display_string = ['Inventory:']
-    display_string.append(indent + 'Max Targets: %d' % self._maxtargets)
+    display_string.append(f'{indent}Max Targets: {self._maxtargets}')
     # Sub section for Filters and Exclusions.
-    display_string.append(indent + 'Filters:')
-    # Increase indent.
-    indent += '  '
-    # TODO(harro): Will break a filter doesn't have corresponding exclusion.
-    for f, x in zip(sorted(self._inclusions), sorted(self._exclusions)):
+    display_string.append(f'{indent}Filters:')
+    # Assumes that for every inclusion there is a corresponding exclusion.
+    for incl, excl in zip(sorted(self._inclusions), sorted(self._exclusions)):
       # Create paired entries like 'Targets: ..., XTargets: ...'
-      display_string.append('%s%s, %s' % (
-          indent,
-          self._FormatLabelAndValue(f, self._inclusions[f]),
-          self._FormatLabelAndValue(x, self._exclusions[x], caps=2)))
+      display_string.append(
+        f'{indent*2}' +
+        self._FormatLabelAndValue(incl, self._inclusions[incl]) +
+        ', ' +
+        self._FormatLabelAndValue(excl, self._exclusions[excl], caps=2)
+        )
 
     return '\n'.join(display_string) + '\n'
 
@@ -616,6 +614,7 @@ class Inventory(object):
     return self._device_list
 
 
+  #TODO(harro): If we flip the exclude/include logic, is this cleaner?
   def _FilterMatch(self, devicename: str, device_attrs: typing.NamedTuple,
                    exclude=False) -> bool:
     """Returns true if device matches the inclusion/exclusion filter."""
@@ -684,12 +683,12 @@ class Inventory(object):
 
     # Raise error if number of matches exceeds the maximum set by user.
     if self._maxtargets and len(d_list) > self._maxtargets:
-      raise ValueError('Target list exceeded Maximum targets limit of: %s.' %
-                       self._maxtargets)
+      raise ValueError(
+        f'Target list exceeded Maximum targets limit of: {self._maxtargets}.')
 
     # Cache the result.
     self._device_list = d_list
-    logging.debug('Device List length: %d', len(self._device_list))
+    logging.debug(f'Device List length: {len(self._device_list)}')
     return self._device_list
 
   #TODO(harro): Add timeout ... maybe 5min? With user setting.
@@ -718,7 +717,7 @@ class Inventory(object):
     """Creates command request for Device Accessor."""
 
     # Presentation layer for outgoing requests to the external device manager.
-    logging.debug("Built Cmd Request: '%s' for host: '%s'.", command, target)
+    logging.debug(f"Built Cmd Request: '{command}' for host: '{target}'.")
     return self.CmdRequest(target, command, mode)
 
   def _CmdResponsePresentation(self, response: object) -> CmdResponse:
@@ -798,7 +797,7 @@ class FilterMatch(object):
             else:
               re_substrs.append(re.compile(substring))
           except re.error:
-            raise ValueError('The filter regexp "%r" is invalid' % substring)
+            raise ValueError(f'The filter regexp "{substring}" is invalid.')
         else:
           if ignore_case:
             # Canonalise to all lowercase.
