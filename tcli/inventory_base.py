@@ -224,11 +224,6 @@ class Inventory(object):
       self._inclusions[attr] = ''
       self._exclusions['x' + attr] = ''
 
-
-  ############################################################################
-  # Thread safe public methods and properties.                               #
-  ############################################################################
-
   def GetDevices(self):
     """Loads Devices from external store.
 
@@ -335,10 +330,6 @@ class Inventory(object):
   device_list = property(GetDeviceList)
   # pylint: disable=protected-access
   targets = property(lambda self: self._inclusions['targets'])
-
-  ############################################################################
-  # Methods related to registering/executing TCLI CLI command extensions.    #
-  ############################################################################
 
   # Command handlers have identical arguments.
   # pylint: disable=unused-argument
@@ -534,7 +525,6 @@ class Inventory(object):
     unmatched_literals = set(literals).difference(set(validate_list))
     return False if unmatched_literals else True
 
-
   def _FormatLabelAndValue(self, label, value, caps=1):
     """Returns string with titlecase label and corresponding value."""
 
@@ -564,10 +554,6 @@ class Inventory(object):
 
     return '\n'.join(display_string) + '\n'
 
-  ############################################################################
-  # Methods related to building, managing and serving the device inventory.  #
-  ############################################################################
-
   def _GetDevices(self) -> dict[str, typing.NamedTuple]:
     """Returns a dict of Device objects. Blocks until devices have loaded."""
 
@@ -584,7 +570,6 @@ class Inventory(object):
     # 'None' means the list needs to be built first.
     if self._device_list is None: return self._BuildDeviceList()
     return self._device_list
-
 
   #TODO(harro): If we flip the exclude/include logic, is this cleaner?
   def _FilterMatch(self, devicename: str, device_attrs: typing.NamedTuple,
@@ -679,10 +664,6 @@ class Inventory(object):
     """Fetches Devices from external store ."""
 
     raise NotImplementedError
-
-  #############################################################################
-  # Methods related to sending commands and receiving responses from devices. #
-  #############################################################################
 
   def _SendRequests(
       self, requests_callbacks: tuple, deadline: float|None=None) -> None:

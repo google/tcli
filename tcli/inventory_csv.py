@@ -104,20 +104,12 @@ class Inventory(inventory_base.Inventory):
 
   SOURCE = 'csv'
 
-  ############################################################################
-  # Methods related to registering/executing CLI command extensions.         #
-  ############################################################################
-
   def _ShowEnv(self):
     """Extends show environment to display CSV specific values in TCLI."""
 
     # The extra attribute filters get picked up automatically.
     # So we call the parent unchanged.
     return super(Inventory, self)._ShowEnv()
-
-  ############################################################################
-  # Methods related to managing and serving the device inventory.            #
-  ############################################################################
 
   def _ParseDevicesFromCsv(self, buf, separator=','):
     """Parses buffer into tabular format.
@@ -212,10 +204,6 @@ class Inventory(inventory_base.Inventory):
     with open(FLAGS.inventory) as csv_file:
       logging.debug('Reading device inventory for file "%s".', FLAGS.inventory)
       self._devices = self._ParseDevicesFromCsv(csv_file)
-
-  ############################################################################
-  # Methods related to sending commands and receiving responses from devices.#
-  ############################################################################
 
   def _SendRequests(
       self, requests_callbacks: tuple, deadline: float|None=None) -> None:
