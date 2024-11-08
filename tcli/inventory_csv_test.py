@@ -42,7 +42,6 @@ class UnitTestCSVInventory(unittest.TestCase):
     # Trigger FLAGS initialisation before referencing maxtargets flag.
     inventory.FLAGS([__file__,])
     self.inv = inventory.Inventory()
-    self.inv.LoadDevices()
     # Clear all filters for targets etc.
     self._ClearFilters(self.inv)
     
@@ -104,14 +103,6 @@ class UnitTestCSVInventory(unittest.TestCase):
     """Tests directly loading device inventory from CSV file."""
     self.inv._devices = {}
     self.inv._FetchDevices()
-    self.assertTrue(self.inv._devices)
-
-  def testLoadDevices(self):
-    """Tests loading device inventory from CSV via the base class method."""
-    self.inv._devices = {}
-    self.inv.LoadDevices()
-    # Load is async so we wait for it to complete before testing outcome.
-    self.inv._devices_loaded.wait()
     self.assertTrue(self.inv._devices)
 
   def testCmdResponsePresentation(self):

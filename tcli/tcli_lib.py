@@ -454,7 +454,6 @@ class TCLI(object):
       self.inventory = inventory.Inventory()
       # Add additional command support for Inventory library.
       self.inventory.RegisterCommands(self.cli_parser)
-      self.inventory.LoadDevices()
     except inventory.AuthError as error_message:
       self._PrintWarning(str(error_message))
       raise inventory.AuthError()

@@ -54,7 +54,6 @@ class InventoryBaseTest(unittest.TestCase):
     super(InventoryBaseTest, self).setUp()
     self.dev_inv_orig = inventory_base.DEVICE_ATTRIBUTES
     self.inv = inventory_base.Inventory()
-    self.inv.LoadDevices()
     self._ClearFilters(self.inv)
 
   def tearDown(self):
@@ -144,8 +143,8 @@ class InventoryBaseTest(unittest.TestCase):
     # Update
     self.inv._CmdMaxTargets(command, ['10'])
     self.assertEqual(self.inv._maxtargets, 10)
-    # Error
     self.assertRaises(ValueError, self.inv._CmdMaxTargets, command, ['-10'])
+    # Error
 
   def testBuildDeviceListWithMaxTargets(self):
     """Tests triggereing maximum target limit."""

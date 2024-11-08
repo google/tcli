@@ -171,17 +171,19 @@ class Inventory(object):
   def __init__(self):
     """Initialise thread safe access to data to support async calls."""
 
+    self._getter_lock = threading.Lock()
+    self._load_lock = threading.Lock()
+    self._loaded = threading.Event()
+    self._loaded.set()
     # Devices keyed on device name.
-    # If we have already loaded the devices, don't do it again.
+    # If we have already loaded devices e.g. copy, don't do it again.
     if not hasattr(self, '_devices'):
       self._devices = {}
+      # Load device inventory from external source.
+      self.Load()
     # List of device names.
     self._device_list = None
     self._filters = {}
-    self._lock = threading.Lock()
-    self._devices_lock = threading.Lock()
-    self._devices_loaded = threading.Event()
-    self._devices_loaded.set()
     self._maxtargets = FLAGS.maxtargets
 
     # Filters and exclusions added by this library.
@@ -228,8 +230,7 @@ class Inventory(object):
     Returns:
       List of request objects.
     """
-    with self._lock:
-      return self._CmdRequestPresentation(target, command, mode)
+    return self._CmdRequestPresentation(target, command, mode)
 
   def GetDevices(self):
     """Loads Devices from external store.
@@ -244,29 +245,27 @@ class Inventory(object):
     }
     """
 
-    with self._lock:
+    with self._getter_lock:
       return self._GetDevices()
 
   def GetDeviceList(self):
     """Returns a filtered list of Devices."""
-    with self._lock:
+    with self._getter_lock:
       return self._GetDeviceList()
 
-  def LoadDevices(self):
-    """Loads Devices from external store.
+  def Load(self) -> None:
+    """Loads Devices inventory from external store."""
 
-    Stores data in _devices in a format like:
-    {'devicename1: Device(attribute1='value1',
-                          attribute2='value2',
-                          ... ),
-     'devicename2: Device('attribute1='value3',
-                          ... ),
-     ...
-    }
-    """
-
-    with self._lock:
-      self._LoadDevices()
+    # Block additional requests until completed.
+    self._load_lock.acquire()
+    # Block reads of the devices until loaded.
+    self._loaded.clear()
+    # Collect result in a thread so it can complete in the background.
+    # Threading here is helpful if device inventory is large.
+    self._devices_thread = threading.Thread(name='Device loader',
+                                            target=self._AsyncLoad,
+                                            daemon=True)
+    self._devices_thread.start()
 
   def CmdResponsePresentation(self, response):
     """Formats command response into name value pairs in a dictionary.
@@ -356,8 +355,7 @@ class Inventory(object):
 
   def ShowEnv(self):
     """Show command settings."""
-    with self._lock:
-      return self._ShowEnv()
+    return self._ShowEnv()
 
   # Obtains devices when they have been loaded.
   devices = property(GetDevices)
@@ -604,7 +602,7 @@ class Inventory(object):
     """Returns a dict of Device objects. Blocks until devices have loaded."""
 
     # Wait for any pending device loading.
-    self._devices_loaded.wait()
+    self._loaded.wait()
     if not self._devices:
       raise InventoryError(
           'Device inventory data failed to load or no devices found.')
@@ -694,35 +692,22 @@ class Inventory(object):
     logging.debug('Device List length: %d', len(self._device_list))
     return self._device_list
 
-  def _AsyncFetchDevices(self) -> None:
+  #TODO(harro): Add timeout ... maybe 5min? With user setting.
+  def _AsyncLoad(self) -> None:
     """Wrapper for calling FetchDevices from withing a thread."""
 
-    # Threading here is helpful if device inventory is large.
     try:
       self._FetchDevices()
+      logging.info('Fetching of devices completed.')
     finally:
-      self._devices_lock.release()
+      self._load_lock.release()
       # Let pending getters know the data is ready.
-      self._devices_loaded.set()
+      self._loaded.set()
 
   def _FetchDevices(self) -> None|NotImplementedError:
     """Fetches Devices from external store ."""
 
     raise NotImplementedError
-
-  #TODO(harro): Add timeout ... maybe 5min? With user setting.
-  def _LoadDevices(self) -> None:
-    """Loads Devices from external store."""
-
-    # Block additional requests until completed.
-    self._devices_lock.acquire()
-    # Block reads of the devices until loaded.
-    self._devices_loaded.clear()
-    # Collect result in a thread so it can complete in the background.
-    self._devices_thread = threading.Thread(name='Device loader',
-                                            target=self._AsyncFetchDevices,
-                                            daemon=True)
-    self._devices_thread.start()
 
   #############################################################################
   # Methods related to sending commands and receiving responses from devices. #
@@ -813,7 +798,7 @@ class FilterMatch(object):
             else:
               re_substrs.append(re.compile(substring))
           except re.error:
-            raise ValueError('The filter regexp %r is invalid' % substring)
+            raise ValueError('The filter regexp "%r" is invalid' % substring)
         else:
           if ignore_case:
             # Canonalise to all lowercase.
