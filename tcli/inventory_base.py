@@ -332,7 +332,6 @@ class Inventory(object):
   targets = property(lambda self: self._inclusions['targets'])
 
   # Command handlers have identical arguments.
-  # pylint: disable=unused-argument
   def _CmdFilterCompleter(self, word_list, state):
     """Returns a command completion list for valid attribute completions."""
 
@@ -357,7 +356,44 @@ class Inventory(object):
     else:
       return None
 
-  def _CmdFilter(self, command_name: str, args: list[str], append=False) -> str:
+  def _AttributeFilter(
+      self, command_name: str, args: list[str], append:bool=False) -> str:
+    """Updates or displays the inventory inclusions or exclusions (filters).
+
+    Args:
+      command_name: 'attributes' or 'xattributes'.
+      args: list of positional args.
+    Returns:
+      String to display.
+    Raises:
+      ValueError: If called on unknown attribute.
+    """
+
+    if command_name not in ('attributes', 'xattributes'):
+      raise ValueError(f'Command "{command_name}" invalid.')
+    
+    # Display values of all device attribute filters.
+    if not args:
+      result = ''
+      if command_name == 'attributes':
+        attr_list = self._inclusions
+      else: # xattributes
+        attr_list = self._exclusions
+      for attr in attr_list:
+        result += self._CmdFilter(attr, [], append)
+      return result
+
+    # Update attribute filter/s.
+    # TODO(harro): Can we set multiple attributes here by splitting the list?
+    if command_name == 'attributes':
+      self._CmdFilter(args[0], args[1 :], append)
+    else:
+      # 'xattributes' so add 'x' prefix to corresponding attribute.
+      self._CmdFilter('x' + args[0], args[1 :], append)
+    return ''
+  
+  def _CmdFilter(
+      self, command_name: str, args: list[str], append:bool=False) -> str:
     """Updates or displays target device inventory filter.
 
     Args:
@@ -370,18 +406,17 @@ class Inventory(object):
       ValueError: If called on unknown attribute.
     """
 
-    if not (command_name in self._inclusions or
-            command_name in self._exclusions):
+    if (command_name not in self._inclusions and
+        command_name not in self._exclusions):
       raise ValueError(f'Command "{command_name}" invalid.')
 
     # Filter may be inclusive, or exclusive.
     if command_name in self._inclusions:
       filters = self._inclusions
-      # Do we want to captialise the first one or two characters.
-      caps = 1
+      caps = 1    # Capitalise the first character.
     else:
       filters = self._exclusions
-      caps = 2
+      caps = 2    # Capitalise the two characters.
 
     # No args, so display current value/s.
     if not args:
@@ -395,6 +430,7 @@ class Inventory(object):
       # Clear device list to trigger re-application of filter.
       self._device_list = None
       return ''
+
     # Appending a new filter string to an existing filter.
     if append and filter_string and filters[command_name]:
       filter_string = ','.join([filters[command_name], filter_string])
@@ -409,41 +445,6 @@ class Inventory(object):
     # Clear device list to trigger re-application of filter.
     self._device_list = None
     return ''
-
-  def _AttributeFilter(self, command_name: str, args: list[str], append=False) -> str:
-    """Updates or displays the inventory inclusions or exclusions (filters).
-
-    Args:
-      command_name: 'attributes' or 'xattributes'.
-      args: list of positional args.
-    Returns:
-      String to display.
-    Raises:
-      ValueError: If called on unknown attribute.
-    """
-
-    if command_name not in ('attributes', 'xattributes'):
-      raise ValueError('Command "%s" invalid.' % command_name)
-
-    if args:
-      # Update attribute filter/s.
-      # TODO(harro): Can we set multiple attributes here by splitting the list?
-      if command_name == 'attributes':
-        self._CmdFilter(args[0], args[1 :], append)
-      else:
-        # 'xattributes' so add 'x' prefix to corresponding attribute.
-        self._CmdFilter('x' + args[0], args[1 :], append)
-      return ''
-
-    # Display values of all device attribute filters.
-    result = ''
-    if command_name == 'attributes':
-      attr_list = self._inclusions
-    else: # xattributes
-      attr_list = self._exclusions
-    for attr in attr_list:
-      result += self._CmdFilter(attr, [], append)
-    return result
 
   def _CmdMaxTargets(self, command_name: str, args: list[str], append=False) -> str:
     """Updates or displays maxtargets filter.
@@ -470,9 +471,8 @@ class Inventory(object):
 
     self._maxtargets = maxtargets
     return ''
-  # pylint: enable=unused-argument
 
-  def _Flatten(self, container):
+  def _Flatten(self, container: list|tuple):
     """Flattens arbitrarily deeply nested lists."""
 
     for i in container:
@@ -648,7 +648,6 @@ class Inventory(object):
     logging.debug(f'Device List length: {len(self._device_list)}')
     return self._device_list
 
-  #TODO(harro): Add timeout ... maybe 5min? With user setting.
   def _AsyncLoad(self) -> None:
     """Wrapper for calling FetchDevices from withing a thread."""
 
@@ -662,11 +661,11 @@ class Inventory(object):
 
   def _FetchDevices(self) -> None|NotImplementedError:
     """Fetches Devices from external store ."""
-
     raise NotImplementedError
 
   def _SendRequests(
-      self, requests_callbacks: tuple, deadline: float|None=None) -> None:
+      self, requests_callbacks:tuple, deadline:float|None=None
+      ) -> None|NotImplementedError:
     """Submit command requests to device manager."""
     raise NotImplementedError
 
