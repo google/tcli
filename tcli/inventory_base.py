@@ -443,7 +443,7 @@ class Inventory(object):
     self._filters[command_name] = _filter
     filters[command_name] = filter_string
     # Clear device list to trigger re-application of filter.
-    self._device_list = None
+    self._BuildDeviceList()
     return ''
 
   def _CmdMaxTargets(self, command_name: str, args: list[str], append=False) -> str:

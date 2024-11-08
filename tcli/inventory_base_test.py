@@ -152,8 +152,8 @@ class InventoryBaseTest(unittest.TestCase):
     self.inv._CmdFilter('targets', ['^device.*'])
     # Limit not triggered by changing the value.
     self.inv._maxtargets = 2
-    # Limit triggered when displaying new device list.
-    self.assertRaises(ValueError, self.inv.GetDeviceList)
+    # Limit triggered next time we update a filter.
+    self.assertRaises(ValueError, self.inv._CmdFilter, 'targets', ['^device.*'])
 
   def testCmdHandlers(self):
     """Tests the extended handler."""
