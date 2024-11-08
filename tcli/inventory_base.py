@@ -90,14 +90,14 @@ CmdResponse = collections.namedtuple(
 
 FLAGS = flags.FLAGS
 
+flags.DEFINE_integer(
+    'maxtargets', DEFAULT_MAXTARGETS,
+    TILDE_COMMAND_HELP['maxtargets'])
+
 flags.DEFINE_string(
     'targets', '',
     TILDE_COMMAND_HELP['targets'],
     short_name='T')
-
-flags.DEFINE_integer(
-    'maxtargets', DEFAULT_MAXTARGETS,
-    TILDE_COMMAND_HELP['maxtargets'])
 
 flags.DEFINE_string(
     'xtargets', DEFAULT_XTARGETS,
@@ -117,36 +117,38 @@ class InventoryError(Error):
   """General Inventory error."""
 
 
-class DeviceAttribute(object):
-  """Container for holding attribute of device and its associated values."""
+class Attribute(object):
+  """Object for device attributes to be used as cli commands for filtering."""
+  type Case = typing.Union[typing.Literal['lower'],
+                           typing.Literal['upper'],
+                           typing.Literal['title']]
 
-  def __init__(self, attrib_name, default_value, valid_values, help_str,
-               display_case='lower', command_flag=False):
-    self._default_value = default_value
+  #TODO(harro): Use getters / setters here an hide internals.
+  def __init__(
+      self, name: str, default_value: str, valid_values: list[str] | None,
+      help_str: str, display_case: Case='lower', command_flag: bool=False):
+    self._default = default_value
     self.help_str = help_str
-    self.attrib_name = attrib_name
+    self.name = name
     self.valid_values = valid_values
     self.display_case = display_case
     self.command_flag = command_flag
     if self.command_flag:
-      flags.DEFINE_string(self.attrib_name, default_value, help_str)
+      flags.DEFINE_string(self.name, default_value, help_str)
 
   def _GetDefault(self):
-    if self.command_flag and hasattr(flags, self.attrib_name):
-      return getattr(flags, self.attrib_name)
+    if self.command_flag and hasattr(flags, self.name):
+      return getattr(flags, self.name)
     else:
-      return self._default_value
+      return self._default
 
   default_value = property(_GetDefault)
 
 
 class Inventory(object):
-  """Class for device inventory retrieval and command submission.
+  """Base class for device inventory retrieval and command submission.
 
-  Public classes should not require modification and should not be referenced
-  directly here. They are simply thread safe wrappers for the private methods
-  of the same name.
-
+  To be subclassed and customised for the users environment.
   Source specific instantiations of the class should replace private methods.
 
   Attributes:
@@ -178,22 +180,23 @@ class Inventory(object):
     # Devices keyed on device name.
     # If we have already loaded devices e.g. copy, don't do it again.
     if not hasattr(self, '_devices'):
-      self._devices = {}
+      self._devices: dict = {}
       # Load device inventory from external source.
       self.Load()
     # List of device names.
-    self._device_list: None|list[str] = None
-    self._filters = {}
-    self._maxtargets = FLAGS.maxtargets
+    #TODO(harro): Lazy rebuild by assigning None - Maybe a setter is better?
+    self._device_list: list[str] | None = None
+    self._filters: dict[str, FilterMatch] = {}
+    self._maxtargets: int = FLAGS.maxtargets
 
     # Filters and exclusions added by this library.
     # We always have "targets", which is matched against the device name.
-    self._inclusions = {'targets': ''}
-    self._exclusions = {'xtargets': ''}
+    self._inclusions: dict[str, str] = {'targets': ''}
+    self._exclusions: dict[str, str] = {'xtargets': ''}
     # Filters and exclusions added by this library.
-    logging.debug('Device attributes statically defined: "%s".',
-                  DEVICE_ATTRIBUTES)
-    #TODO(harro): Compare against reserved words and raise exception is a dup.
+    logging.debug(
+      f'Device attributes statically defined: "{DEVICE_ATTRIBUTES}".')
+    #TODO(harro): Compare against reserved words and raise exception if a dup.
     for attr in DEVICE_ATTRIBUTES:
       # TODO(harro): Add support for filtering on flag values.
       if attr == 'flags': continue
@@ -320,11 +323,11 @@ class Inventory(object):
 
     # Register commands specific to this inventory source.
     for attribute in DEVICE_ATTRIBUTES.values():
-      if attribute.command_flag and attribute.attrib_name in FLAGS:
-        default_value = getattr(FLAGS, attribute.attrib_name)
+      if attribute.command_flag and attribute.name in FLAGS:
+        default_value = getattr(FLAGS, attribute.name)
       else:
         default_value = attribute.default_value
-      cmd_register.RegisterCommand(attribute.attrib_name,
+      cmd_register.RegisterCommand(attribute.name,
                                    attribute.help_str,
                                    default_value=default_value,
                                    append=True, inline=True, regexp=True,
@@ -561,7 +564,7 @@ class Inventory(object):
     # Confirm that static content matches a valid entry.
     unmatched_literals = set(literals).difference(set(validate_list))
     return False if unmatched_literals else True
-      
+
 
   def _FormatLabelAndValue(self, label, value, caps=1):
     """Returns string with titlecase label and corresponding value."""
@@ -754,7 +757,7 @@ class FilterMatch(object):
   def _Set(self, filter_string: str, ignore_case: bool) -> None:
     """Assigns values to filters.
 
-    Store the literal values and compiled regular expressions in their 
+    Store the literal values and compiled regular expressions in their
     respective dictionaries.
 
     Args:

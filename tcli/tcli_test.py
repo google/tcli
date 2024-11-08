@@ -404,7 +404,7 @@ class UnitTestTCLI(unittest.TestCase):
     """Setup some canned commands and responses."""
 
     tcli.inventory.DEVICE_ATTRIBUTES = {
-        'vendor': tcli.inventory.inventory_base.DeviceAttribute(
+        'vendor': tcli.inventory.inventory_base.Attribute(
             'vendor', '', None, '', display_case='title', command_flag=False)}
     # Initialise the textfsm engine in TCLI.
     self.tcli_obj.filter = 'default_index'

@@ -50,13 +50,13 @@ from tcli.inventory_base import InventoryError  # pylint: disable=unused-import
 ## Note: Two values will be created for each attribute. The second will be
 ## prefixed with an 'x' to be used for inverse matching (exclusions).
 DEVICE_ATTRIBUTES = inventory_base.DEVICE_ATTRIBUTES
-DEVICE_ATTRIBUTES['pop'] = inventory_base.DeviceAttribute(
+DEVICE_ATTRIBUTES['pop'] = inventory_base.Attribute(
     'pop', '', None,
     '\n    Limit device lists to specific pop/s', command_flag=True)
-DEVICE_ATTRIBUTES['realm'] = inventory_base.DeviceAttribute(
+DEVICE_ATTRIBUTES['realm'] = inventory_base.Attribute(
     'realm', 'lab', ['prod', 'lab'],
     '\n    Limit the device list to a specific realm/s.', command_flag=True)
-DEVICE_ATTRIBUTES['vendor'] = inventory_base.DeviceAttribute(
+DEVICE_ATTRIBUTES['vendor'] = inventory_base.Attribute(
     'vendor', '', ['cisco', 'juniper'],
     '\n    Limit device lists to a specific vendor/s', display_case='title',
     command_flag=True)
