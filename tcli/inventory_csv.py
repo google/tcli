@@ -217,45 +217,6 @@ class Inventory(inventory_base.Inventory):
   # Methods related to sending commands and receiving responses from devices.#
   ############################################################################
 
-  def _CmdRequestPresentation(self, target: str, command: str, mode: str
-                              ) -> inventory_base.Inventory.CmdRequest:
-    """Request object to be sent to the external device accessor service."""
-
-    # Presentation layer for outgoing requests to the external device manager.
-    # Data format similar to:
-    # CmdRequest = collections.namedtuple(
-    #   'CmdRequest', ['uid', 'target', 'command', 'mode'])
-    # No op, SendRequests requires no changes to the request format.
-    return super()._CmdRequestPresentation( target, command, mode)
-
-  def _CmdResponsePresentation(
-      self, response: inventory_base.CmdResponse) -> inventory_base.CmdResponse:
-    """Formats command response into name value pairs in a dictionary.
-
-    The device manager specific format of the response is transformed into a
-    more generic dictionary format:
-
-    Args:
-      response: device manager response object for a single device with a
-                uid that corresponds to uid of original request.
-    Returns:
-      Dictionary representation of command response.
-    """
-
-    # Presentation layer for incoming responses from external devic service.
-    # Command response message format:
-    # {
-    #   'uid' : Unique identifier for command
-    #   'device_name': Device name string
-    #   'device': Corresponding entry for the device in the device inventory.
-    #   'command': Command string issued to device
-    #   'data': Command response string, null if error string populated.
-    #   'error': Optional error message string
-    # }
-  
-    # No-Op as response if already formatted correctly.
-    return response
-
   def _SendRequests(
       self, requests_callbacks: tuple, deadline: float|None=None) -> None:
     """Submit command requests to device connection service."""

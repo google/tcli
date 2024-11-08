@@ -67,12 +67,12 @@ class InventoryBaseTest(unittest.TestCase):
     """Test building commands requests to send to device connection service."""
 
     self.inv.CmdRequest.UID = 0
-    request = self.inv.CmdRequestPresentation('device01', 'show vers', 'cli')
+    request = self.inv.CmdRequest('device01', 'show vers', 'cli')
     self.assertEqual('device01', request.target)
     self.assertEqual('show vers', request.command)
     self.assertEqual('cli', request.mode)
     self.assertEqual(1, request.uid)
-    request = self.inv.CmdRequestPresentation('device02', 'show vers', 'shell')
+    request = self.inv.CmdRequest('device02', 'show vers', 'shell')
     self.assertEqual('device02', request.target)
     self.assertEqual('shell', request.mode)
 

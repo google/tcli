@@ -281,7 +281,6 @@ class UnitTestTCLI(unittest.TestCase):
     """Tests async callback."""
 
     self.tcli_obj._FormatResponse = mock.Mock()
-    self.tcli_obj.inventory.CmdResponsePresentation = lambda r: r
 
     self.tcli_obj.Callback(FakeActionRequest('non_exist_uid'))
     # Test that nonexistant uid trigger early return.

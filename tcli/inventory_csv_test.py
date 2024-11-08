@@ -105,19 +105,6 @@ class UnitTestCSVInventory(unittest.TestCase):
     self.inv._FetchDevices()
     self.assertTrue(self.inv._devices)
 
-  def testCmdResponsePresentation(self):
-    """Tests Formatting of response into name value pairs in a dictionary."""
-
-    response = inventory.inventory_base.CmdResponse(
-      uid=1,
-      device_name='device_a',
-      command='show version',
-      data='hello world',
-      error=''
-    )
-    # No-op, so we test that nothing has changed.
-    self.assertTupleEqual(self.inv.CmdResponsePresentation(response), response)
-
   def testSendRequests(self):
     """Tests command requests are pulled from file."""
     

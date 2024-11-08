@@ -159,7 +159,28 @@ class Inventory(object):
   SOURCE = 'unknown'
 
   class CmdRequest(object):
-    """Request object to be sent to the external device accessor service."""
+    """Request object to be sent to the external device accessor service.
+
+    The command request object created should satisfy the format required
+    by the device manager that retrieves the command results.
+
+    Each request object must be assigned a unique 'uid' attribute - unique
+    within the context of all pending requests, and all requests that have not
+    yet been rendered to the user. The device manager may generate this ID,
+    otherwise we add it here. We have no way of determining if a result has
+    been displayed (and the uid freed) so a monotomically increasing 32bit
+    number would suffice.
+
+    Some devices support multiple commandline modes or CLI interpretors
+    e.g. router CLI and sub-system unix cli.
+
+    Args:
+      target: device to send command to.
+      command: string single commandline to send to each device.
+      mode: commandline mode on device to submit the command to.
+    Returns:
+      List of request objects.
+    """
 
     UID = 0    # Each request has an identifier
 
@@ -208,33 +229,6 @@ class Inventory(object):
   # Thread safe public methods and properties.                               #
   ############################################################################
 
-  def CmdRequestPresentation(self, target, command, mode):
-    """Creates command request for sending to device manager.
-
-    The command request object created should satisfy the format required
-    by the device manager in order to retrieve the command result from a device.
-
-    Each request object must be assigned a unique 'uid' attribute - unique
-    within the context of all pending requests and all requests that have not
-    yet been rendered to the user. The device manager may generate this ID,
-    otherwise CreateCmdRequest may add it. We have no way of determining
-    if a result has been displayed (and the uid freed) however something like
-    a monotomically increasing 32bit number would suffice.
-
-    Some devices support multiple commandline modes or CLI interpretors
-    e.g. router CLI and sub-system unix cli.
-    The mode can be used by the device manager to execute the command on the
-    appropriate CLI.
-
-    Args:
-      target: device to send command to.
-      command: string single commandline to send to each device.
-      mode: commandline mode to submit the command to.
-    Returns:
-      List of request objects.
-    """
-    return self._CmdRequestPresentation(target, command, mode)
-
   def GetDevices(self):
     """Loads Devices from external store.
 
@@ -269,28 +263,6 @@ class Inventory(object):
                                             target=self._AsyncLoad,
                                             daemon=True)
     self._devices_thread.start()
-
-  def CmdResponsePresentation(self, response):
-    """Formats command response into name value pairs in a dictionary.
-
-    The device manager specific format of the response is transformed into a
-    more generic dictionary format:
-
-      {
-        'device_name': Device name string
-        'device': Corresponding entry for the device in the device inventory.
-        'command': Command string issued to device
-        'error': Optional error message string
-        'data': Command response string, null if error string populated.
-      }
-
-    Args:
-      response: device manager response object for a single device with a
-                uid that corresponds to uid of original request.
-    Returns:
-      Dictionary representation of command response.
-    """
-    return self._CmdResponsePresentation(response)
 
   def RegisterCommands(self, cmd_register):
     """Add module specific command support to TCLI."""
@@ -343,9 +315,6 @@ class Inventory(object):
 
     As command results from devices are collected then the callback function
     is to be executed by the device manager.
-
-    The response object structure is unspecified but corresponds to a response
-    from a single device and must be parsable by ReformatCmdResponse.
 
     Args:
       requests_callbacks: List of tuples.
@@ -714,29 +683,6 @@ class Inventory(object):
   #############################################################################
   # Methods related to sending commands and receiving responses from devices. #
   #############################################################################
-
-  def _CmdRequestPresentation(
-      self, target: str, command: str, mode: str) -> CmdRequest:
-    """Creates command request for Device Accessor."""
-
-    # Presentation layer for outgoing requests to the external device manager.
-    logging.debug(f"Built Cmd Request: '{command}' for host: '{target}'.")
-    return self.CmdRequest(target, command, mode)
-
-  def _CmdResponsePresentation(self, response: object) -> CmdResponse:
-    """Formats command response into name value pairs in a dictionary."""
-
-    # Presentation layer for incoming responses from external devic service.
-    # Command response message format:
-    # {
-    #   'uid' : Unique identifier for command
-    #   'device_name': Device name string
-    #   'device': Corresponding entry for the device in the device inventory.
-    #   'command': Command string issued to device
-    #   'data': Command response string, null if error string populated.
-    #   'error': Optional error message string
-    # }
-    raise NotImplementedError
 
   def _SendRequests(
       self, requests_callbacks: tuple, deadline: float|None=None) -> None:
