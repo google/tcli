@@ -12,9 +12,9 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
-"""TCLI - Accesses CLI of network devices.
+"""TCLI - Tokenised CLI for accessing command driven devices.
 
-TCLI is a frontend to TextFSM that supports interactive execution of commands on
+TCLI is a frontend to TextFSM that adds interactive execution of commands on
 multiple target devices and returns the results in one of several formats.
 
 Type '%shelp' to get started. All TCLI commands are prefixed with a '%s'.
@@ -27,17 +27,18 @@ through 'wc -l' locally in the tcli client.
 
 Inline commands are supported with '%s%s'.
   e.g 'show version %s%sdisplay csv %s%scolor on
-Returns the output of the'show version' in csv format and with color
+Returns the output of the'show version' in csv format, with color still on,
 regardless of what the global setting are. Global settings are not changed
 by inline commands.
 
-Commands can be passed through to the shell with '%s!' or '%sexec'.
+Commands can be passed to the client shell with '%s!' or '%sexec'.
 
-The file '~/.tclirc' is executed at startup by TCLI.
+The file '~/.tclirc' is executed at startup.
 
-Starts in 'safe mode' when run interactively, toggle with '%sS' or '%ssafemode'.
+Exercise caution against 'overmatching' with your target and attribute filters.
+
+Interactive TCLI starts in 'safe mode' - toggle off with '%sS' or '%ssafemode'.
 """
-
 
 import copy
 import os
@@ -61,113 +62,120 @@ from textfsm import texttable
 from textfsm.texttable import TableError
 
 # Substitute import with appropriate inventory/device accessor library.
-# The example library provided uses static CSV file for inventory and canned
-# output for device responses. It serves as an example only.
+# The example library provided uses static CSV file for inventory and some
+# canned output as example device responses. It serves as an example only.
 ## CHANGEME
 ##
-from tcli import inventory_csv as inventory  # pylint: disable=g-bad-import-order
+from tcli import inventory_csv as inventory  #pylint: disable=g-bad-import-order
 
+# Formats for displaying to the user.
 DISPLAY_FORMATS = ['raw', 'csv', 'tbl', 'nvp']
 
+# cli modes on the target device.
 MODE_FORMATS = ['cli', 'gated', 'http', 'shell']
 
-# known as tilde for historic reasons.
-TILDE = '/'
-__doc__ = __doc__.replace('%s', TILDE)    # pylint: disable=redefined-builtin
+# TCLI (local) command prefix.
+ESCAPE = '/'
+# pylint: disable=redefined-builtin
+if __doc__: __doc__ = __doc__.replace('%s', ESCAPE)
 
 # Banner message to display at program start.
-MOTD = '#!' + '#' * 76 + '!#' + """
+BANNER_WIDTH = 76
+MOTD = f"""#!{'#'*BANNER_WIDTH}!#' 
 #! TCLI - Tokenized Command Line Interface
 #! Note: Beta code, use with caution.
 #!
-#! Type '%shelp' to get started.
-#! To disable color: '%scolor off'.
+#! Type '{ESCAPE}help' to get started.
+#! To disable color: '{ESCAPE}color off'.
 #!
 #! For more guidance see:
-#! https://github.com/google/tcli
+#! https://github.com/harro/tcli
 #!
 #! Note:
 #! Interactive TCLI starts in safe mode (indicated by '*' in the prompt).
-#! To disable safe mode: '%ssafemode off'.
+#! To disable safe mode: '{ESCAPE}safemode off'.
 #!
 #! Have a nice day!
-#!""".replace('%s', TILDE) + '#' * 76 + '!#'
+#!{'#'*BANNER_WIDTH}!#"""
 
 # Text displayed by online help.
 # The keys are the list of permissable escape commands.
+INDENT = f'\n' + ' '*4
 TILDE_COMMAND_HELP = {
-    'buffer': '\n    Show contents of buffer.',
-    'bufferlist':
-        '\n    Show buffers currently in use (written to and not cleared).',
-    'clear': '\n    Deletes contents of named buffer.',
-    'color': '\n    Toggle color support.',
-    'color_scheme':
-        "\n    Use 'light' scheme on dark background or 'dark' otherwise.",
-    'command':
-        "\n    Submit command to target device's. Safe mode enforces use of "
-        "\n    'command' for sending input to targets."
-        "\n    Shortname: 'C'.",
-    'defaults':
-        '\n    Returns environment to startup/factory defaults.'
-        '\n    Supply argument to set a specific value back to default,'
-        "\n    or 'all' to return everything to the defaults.",
-    'display':
-        '\n    Extensible set of routines used for formatting command output.'
-        '\n    Available display formats are: %s'
-        "\n    Shortname: 'D'." % DISPLAY_FORMATS,
-    'env': '\n    Display current escape command settings.',
-    'exec': '\n    Execute command in shell.'
-            "\n    Shortname: '!'.",
-    'exit': '\n    Exit tcli.',
-    'expandtargets':
-        "\n    Displays the expanded list of devices matched by 'targets' and"
-        "\n    not matched by 'xtargets'.",
-    'filter':
-        '\n    File name that maps templates for extracting data from output.'
-        "\n    Is disabled if display is in 'raw' mode."
-        "\n    Shortname: 'F'.",
-    'help': '\n    Display escape command online help.',
-    'inventory':
-        '\n    Displays attributes of matched targets.'
-        "\n    Shortname: 'V'.",
-    'linewrap': '\n    Set line wrap for displayed data.',
-    'log':
-        '\n    Record commands and device output to buffer.'
-        '\n    Does not include escape commands or output from these commands.',
-    'logall':
-        '\n    Record both commands and escape commands and output to buffer.',
-    'logstop':
-        '\n    Stop recording or logging to named buffer (same as '
-        "'recordstop').",
-    'mode':
-        '\n    CLI mode for command.'
-        '\n    Available command modes are: %s.'
-        "\n    Shortname: 'M'." % MODE_FORMATS,
-    'quit': '\n    Exit by another name.',
-    'read':
-        '\n    Read contents of file and store in buffer.'
-        '\n    File name is specified at a subsequent prompt.',
-    'record':
-        '\n    Record commands to named <buffer>.'
-        '\n    If command is appended with {APPEND} then append to buffer.',
-    'recordall':
-        '\n    Record commands and escape commands to named <buffer>.'
-        '\n    If command is appended with {APPEND} then append to buffer.',
-    'recordstop':
-        "\n    Stop recording or logging to named buffer (same as 'logstop').",
-    'safemode':
-        "\n    Do not forward input to 'targets' unless using 'command'."
-        "\n    Shortname: 'S'.",
-    'timeout':
-        '\n    Period (in seconds) to wait for outstanding command responses.',
-    'play':
-        '\n    Play out recorded keystrokes from named buffer to target '
-        "device/s.\n    Shortname: 'P'.",
-    'write':
-        '\n    Dumps contents of buffer to file.'
-        '\n    File name is specified at a subsequent prompt.',
-    'verbose': '\n    Display extra data columns in output (for csv mode).',
-    'vi': '\n    Opens buffer in vi editor.',
+  'buffer': f'{INDENT}Show contents of buffer.',
+  'bufferlist':
+    f'{INDENT}Show buffers currently in use (written to and not cleared).',
+  'clear': f'{INDENT}Deletes contents of named buffer.',
+  'color': f'{INDENT}Toggle color support.',
+  'color_scheme':
+    f"{INDENT}Use 'light' scheme on dark background or 'dark' otherwise.",
+  'command':
+    f"{INDENT}Submit command to target device's. Safe mode enforces use of "
+    f"{INDENT}'command' for sending input to targets."
+    f"{INDENT}Shortname: 'C'.",
+  'defaults':
+    f'{INDENT}Returns environment to startup/factory defaults.'
+    f'{INDENT}Supply argument to set a specific value back to default,'
+    f"{INDENT}or 'all' to return everything to the defaults.",
+  'display':
+    f'{INDENT}Extensible set of routines used for formatting command output.'
+    f'{INDENT}Available display formats are: {DISPLAY_FORMATS}'
+    f"{INDENT}Shortname: 'D'.",
+  'env': f'{INDENT}Display current escape command settings.',
+  'exec':
+    f'{INDENT}Execute command in shell.'
+    f"{INDENT}Shortname: '!'.",
+  'exit': f'{INDENT}Exit tcli.',
+  'expandtargets':
+    f"{INDENT}Displays the expanded list of devices matched by 'targets' and"
+    f"{INDENT}not matched by 'xtargets'.",
+  'filter':
+    f'{INDENT}File name that maps templates for extracting data from output.'
+    f"{INDENT}Is disabled if display is in 'raw' mode."
+    f"{INDENT}Shortname: 'F'.",
+  'help': f'{INDENT}Display escape command online help.',
+  'inventory':
+    f'{INDENT}Displays attributes of matched targets.'
+    f"{INDENT}Shortname: 'V'.",
+  'linewrap': f'{INDENT}Set line wrap for displayed data.',
+  'log':
+    f'{INDENT}Record commands and device output to buffer.'
+    f'{INDENT}Does not include escape commands or output from these commands.',
+  'logall':
+    f'{INDENT}Record both commands and escape commands and output to buffer.',
+  'logstop':
+    f"{INDENT}Stop recording or logging to named buffer (same as 'recordstop'.",
+  'mode':
+    f'{INDENT}CLI mode for command.'
+    f'{INDENT}Available command modes are: {MODE_FORMATS}.'
+    f"{INDENT}Shortname: 'M'.",
+  'quit': f'{INDENT}Exit by another name.',
+  'read':
+    f'{INDENT}Read contents of file and store in buffer.'
+    f'{INDENT}File name is specified at a subsequent prompt.',
+  'record':
+    f'{INDENT}Record commands to named <buffer>.'
+    f'{INDENT}If command is appended with'
+    f' {command_parser.APPEND} then append to buffer.',
+  'recordall':
+    f'{INDENT}Record commands and escape commands to named <buffer>.'
+    f'{INDENT}If command is appended with'
+    f' {command_parser.APPEND} then append to buffer.',
+  'recordstop':
+    f"{INDENT}Stop recording or logging to named buffer (same as 'logstop').",
+  'safemode':
+    f"{INDENT}Do not forward input to 'targets' unless using 'command'."
+    f"{INDENT}Shortname: 'S'.",
+  'timeout':
+    f'{INDENT}Period (in seconds) to wait for outstanding command responses.',
+  'play':
+    f'{INDENT}Play out recorded keystrokes from named buffer to target '
+    f"device/s.{INDENT}Shortname: 'P'.",
+  'write':
+    f'{INDENT}Dumps contents of buffer to file.'
+    f'{INDENT}File name is specified at a subsequent prompt.',
+  'verbose': f'{INDENT}Display extra data columns in output (for csv mode).',
+  'vi': f'{INDENT}Opens buffer in vi editor.',
 }
 
 # Prompt displays the target string, count of targets and if safe mode is on.
@@ -199,76 +207,62 @@ DEFAULT_CMDS = {
     'mode': 'cli',
     'timeout': 45
 }
-# Run commands default location. Commands are run from this file at startup.
-try:
-  DEFAULT_CONFIGFILE = os.path.join(os.environ.get('HOME'), '.tclirc')
-except (AttributeError, TypeError):
-  DEFAULT_CONFIGFILE = 'none'
+# Default path for config commands. Commands are run from this file at startup.
+DEFAULT_CONFIGFILE = os.path.join(os.path.expanduser('~'), '.tclirc')
 
 FLAGS = flags.FLAGS
-flags.DEFINE_string('template_dir',
-                    os.path.join(
-                        os.path.dirname(__file__),
-                        'testdata'),
-                    '\n    Path where command templates are located',
-                    short_name='t')
+flags.DEFINE_string(
+  'template_dir', os.path.join(os.path.dirname(__file__), 'testdata'),
+  f'{INDENT}Path where command templates are located', short_name='t')
 
 flags.DEFINE_boolean(
-    'interactive', False,
-    '\n    tcli runs in interactive mode. This is the default mode if no'
-    ' cmds are supplied.\n',
-    short_name='I')
+  'interactive', False,
+  f'{INDENT}tcli runs in interactive mode. This is the default mode if no'
+  ' cmds are supplied.\n', short_name='I')
 
 flags.DEFINE_boolean(
-    'color', DEFAULT_CMDS['color'],
-    '\n    Use color when displaying results.')
+  'color', DEFAULT_CMDS['color'], f'{INDENT}Use color when displaying results.')
 
 flags.DEFINE_enum(
-    'color_scheme', DEFAULT_CMDS['color_scheme'], COLOR_SCHEMES,
-    TILDE_COMMAND_HELP['color_scheme'])
+  'color_scheme', DEFAULT_CMDS['color_scheme'], COLOR_SCHEMES,
+  TILDE_COMMAND_HELP['color_scheme'])
 
 flags.DEFINE_boolean(
-    'dry_run', False,
-    '\n    Display commands and targets, without submitting commands.')
+  'dry_run', False,
+  f'{INDENT}Display commands and targets, without submitting commands.')
 
 flags.DEFINE_boolean(
-    'linewrap', DEFAULT_CMDS['linewrap'],
-    '\n    Override default line wrap behavior.')
+  'linewrap', DEFAULT_CMDS['linewrap'],
+  f'{INDENT}Override default line wrap behavior.')
 
 flags.DEFINE_string(
-    'cmds', None,
-    '\n    Commands (newline separated) to send to devices in the target list.'
-    "'Prompting' commands, commands that request further input from the"
-    ' user before completing are discouraged and will fail.\n'
-    'Examples to avoid: telnet, ping, reload.',
-    short_name='C')
+  'cmds', None,
+  f'{INDENT}Commands (newline separated) to send to devices in the target list.'
+  f"{INDENT}'Prompting' commands, commands that request further input from the"
+  f'{INDENT}user before completing are discouraged and will fail.\n'
+  f'{INDENT}Examples to avoid: telnet, ping, reload.', short_name='C')
 
 flags.DEFINE_string(
-    'config_file', DEFAULT_CONFIGFILE,
-    '\n    Configuration file to read. Lines in this file will be read into '
-    '\n    buffer "startup" and played.'
-    "\n    Skipped if file name is the string 'None|none'",
-    short_name='R')
+  'config_file', DEFAULT_CONFIGFILE,
+  f'{INDENT}Configuration file to read. Lines in this file will be read into '
+  f'{INDENT}buffer "startup" and played.'
+  f"{INDENT}Skipped if file name is the string 'None|none'", short_name='R')
 
 flags.DEFINE_enum(
-    'display', DEFAULT_CMDS['display'], DISPLAY_FORMATS,
-    TILDE_COMMAND_HELP['display'],
-    short_name='D')
+  'display', DEFAULT_CMDS['display'], DISPLAY_FORMATS,
+  TILDE_COMMAND_HELP['display'], short_name='D')
 
 flags.DEFINE_enum(
-    'mode', DEFAULT_CMDS['mode'], MODE_FORMATS,
-    TILDE_COMMAND_HELP['mode'],
-    short_name='M')
+  'mode', DEFAULT_CMDS['mode'], MODE_FORMATS, TILDE_COMMAND_HELP['mode'],
+  short_name='M')
 
 flags.DEFINE_enum(
-    'filter', DEFAULT_CMDS['filter'], ['default_index', ''],
-    TILDE_COMMAND_HELP['filter'],
-    short_name='F')
+  'filter', DEFAULT_CMDS['filter'], ['default_index', ''],
+  TILDE_COMMAND_HELP['filter'], short_name='F')
 
 flags.DEFINE_integer(
-    'timeout', DEFAULT_CMDS['timeout'],
-    TILDE_COMMAND_HELP['timeout'],
-    short_name='O')
+  'timeout', DEFAULT_CMDS['timeout'], TILDE_COMMAND_HELP['timeout'],
+  short_name='O')
 
 flags.DEFINE_boolean('sorted', False, 'Sort device entries in output.')
 
@@ -288,7 +282,7 @@ class TcliCmdError(Error):
 
 
 class TCLI(object):
-  """TCLI - A Grouping Network Command-Line Interface.
+  """TCLI - Tokenised Command-Line Interface.
 
   Parent object when file is invoked as an executable.
 
@@ -347,14 +341,10 @@ class TCLI(object):
     self.mode = None
     self.timeout = None
     # Buffers
-    self.log = ''
-    self.logall = ''
-    self.record = ''
-    self.recordall = ''
+    self.log = self.logall = ''
+    self.record = self.recordall = ''
     # Display values.
-    self.system_color = ''
-    self.title_color = ''
-    self.warning_color = ''
+    self.system_color = self.title_color = self.warning_color = ''
 
     self.buffers = text_buffer.TextBuffer()
     self.cmd_response = command_response.CmdResponse()
@@ -409,17 +399,18 @@ class TCLI(object):
     """Display message of the day."""
     self._PrintSystem(MOTD)
 
-  def _SetFiltersFromDefaults(self):
-    """Trawls the filters and sets to the matching flags value."""
+  def _SetFiltersFromDefaults(
+      self, inv:inventory.Inventory) -> None|AttributeError:
+    """Trawls filters and sets the matching commands via the cli_parser."""
 
     # Commands that may be specified in flags.
-    # pylint: disable=protected-access
-    for filter_name in self.inventory._inclusions:
+    for filter_name in inv.inclusions:
       try:
         self.cli_parser.ExecWithDefault(filter_name)
       except ValueError:
         pass
-    for filter_name in self.inventory._exclusions:
+  
+    for filter_name in inv.exclusions:
       try:
         self.cli_parser.ExecWithDefault(filter_name)
       except ValueError:
@@ -428,24 +419,23 @@ class TCLI(object):
   def _SetPrompt(self):
     """Sets the prompt string with current targets."""
 
-    if self.safemode:
-      safe = '*'
-    else:
-      safe = ''
+    safe = '*' if self.safemode else ''
 
     # Truncate prompt if too long to fit in terminal.
     (_, width) = terminal.TerminalSize()
+    # Render, without replacing, the prompt to see if it will fit on a row.
+    # Drop the target_str if that is not the case.
     if (len(PROMPT_HDR % (
-        self.inventory.targets,
+        self.inventory.inclusions['targets'],
         len(self.device_list), safe)) > width):
       target_str = '#####'
     else:
       target_str = self.inventory.targets
 
-    self.prompt = PROMPT_HDR % (
-        terminal.AnsiText(target_str, self.system_color),
-        terminal.AnsiText(len(self.device_list), self.warning_color),
-        terminal.AnsiText(safe, self.title_color))
+    self.prompt = PROMPT_HDR.format(
+      terminal.AnsiText(target_str, self.system_color),
+      terminal.AnsiText(len(self.device_list), self.warning_color),
+      terminal.AnsiText(safe, self.title_color))
 
   def _InitInventory(self):
     """Inits inventory and triggers async load of device data."""
@@ -610,7 +600,8 @@ class TCLI(object):
     if not self.inventory:
       self._InitInventory()
     self.RegisterCommands(self.cli_parser)
-    self._SetFiltersFromDefaults()
+    if self.inventory:
+      self._SetFiltersFromDefaults(self.inventory)
     # Set some markup flags early.
     self.SetDefaults()
     if self.interactive:
@@ -642,7 +633,7 @@ class TCLI(object):
 
     # Silently discard leading whitespace on cli.
     full_line = readline.get_line_buffer().lstrip()
-    if full_line and full_line.startswith(TILDE):
+    if full_line and full_line.startswith(ESCAPE):
       return self._TildeCompleter(full_line, state)
     return self._CmdCompleter(full_line, state)
 
@@ -675,7 +666,7 @@ class TCLI(object):
 
     if state < len(completer_list):
       # Re-apply TILDE to completion.
-      return TILDE + completer_list[state]
+      return ESCAPE + completer_list[state]
     return None
 
   def _CmdCompleter(self, full_line, state):
@@ -771,7 +762,7 @@ class TCLI(object):
         continue
 
       # TCLI commands.
-      if command.startswith(TILDE):
+      if command.startswith(ESCAPE):
         _FlushCommands(command_list)
         # Remove tilde command prefix and submit to TCLI command interpreter.
         self.TildeCmd(command[1 :])
@@ -899,7 +890,7 @@ class TCLI(object):
         if command in ('recordstop', 'logstop') and args and args[0] == buf:
           continue
         # Prefix tilde back onto logs.
-        self.buffers.Append(buf, TILDE + line)
+        self.buffers.Append(buf, ESCAPE + line)
 
     # Command execution.
     try:
@@ -936,15 +927,15 @@ class TCLI(object):
     Returns:
       Tuple, the command line with inline TCLI commands removed and TCLI
       instance with the tilde commands applied (None if no tilde commands).
-    """.replace('%s', (TILDE * 2))
+    """.replace('%s', (ESCAPE * 2))
 
-    if '%s' % (TILDE * 2) not in command:
+    if '%s' % (ESCAPE * 2) not in command:
       return (command, None)
 
     # Create new child with inline escape command changes.
     inline_tcli = copy.copy(self)
 
-    token_list = command.split(' %s' % (TILDE * 2))
+    token_list = command.split(' %s' % (ESCAPE * 2))
     # If all tokens parse then the first token is the commandline.
     command_left = token_list[0]
     command_right = token_list[1 :]
@@ -959,12 +950,12 @@ class TCLI(object):
       except (ValueError, ParseError):
         # If a token doesn't parse then it and all tokens to the left are
         # returned to the commandline.
-        command_left = (' %s' % (TILDE * 2)).join(token_list[:index + 1])
+        command_left = (' %s' % (ESCAPE * 2)).join(token_list[:index + 1])
         break
       except EOFError:
         # Exit in this context stop further inline command parsing.
         # Inline commands to the left of the exit are treated as regular input.
-        command_left = (' %s' % (TILDE * 2)).join(token_list[:index])
+        command_left = (' %s' % (ESCAPE * 2)).join(token_list[:index])
         break
       index -= 1
 
@@ -1287,10 +1278,11 @@ class TCLI(object):
 
     default = args[0]
     if default == 'all':
-      # Re apply explicit flags.
+      # Reapply explicit flags.
       # TODO(harro): Only sets some core values (with flags), could reset more?
       self.SetDefaults()
-      self._SetFiltersFromDefaults()
+      if self.inventory:
+        self._SetFiltersFromDefaults(self.inventory)
     else:
       try:
         return self.cli_parser.ExecWithDefault(default)

@@ -224,6 +224,14 @@ class Inventory(object):
       self._inclusions[attr] = ''
       self._exclusions['x' + attr] = ''
 
+  @property
+  def inclusions(self):
+    return self._inclusions
+
+  @property
+  def exclusions(self):
+    return self._exclusions
+
   def GetDevices(self):
     """Loads Devices from external store.
 

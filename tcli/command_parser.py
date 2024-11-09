@@ -259,7 +259,7 @@ class CommandParser(dict):
     """
 
     self[command_name] = self._Command({
-        'help_str': help_str.format(APPEND=APPEND),
+        'help_str': help_str,
         'short_name': short_name,
         'min_args': min_args,
         'max_args': max_args,

@@ -612,50 +612,50 @@ class UnitTestTCLI(unittest.TestCase):
     self.assertEqual(cmd, new_cmd)
 
     # Command with invalid inlines returns original command line.
-    cmd = '{} {}bogus'.format(cmd_base, tcli.TILDE*2)
+    cmd = '{} {}bogus'.format(cmd_base, tcli.ESCAPE*2)
     (new_cmd, _) = self.tcli_obj._ExtractInlineCommands(cmd)
     self.assertEqual(cmd, new_cmd)
 
     # The tilde must be preceded by a space.
-    cmd = '{}{}log bogus'.format(cmd_base, tcli.TILDE*2)
+    cmd = '{}{}log bogus'.format(cmd_base, tcli.ESCAPE*2)
     (new_cmd, _) = self.tcli_obj._ExtractInlineCommands(cmd)
     self.assertEqual(cmd, new_cmd)
 
     # Command with simple inline in short form.
-    cmd = '{} {}D csv'.format(cmd_base, tcli.TILDE*2)
+    cmd = '{} {}D csv'.format(cmd_base, tcli.ESCAPE*2)
     (new_cmd, tcli_object) = self.tcli_obj._ExtractInlineCommands(cmd)
     self.assertEqual(cmd_base, new_cmd)
     self.assertEqual('csv', tcli_object.display)
 
     # Multiple inline commands are supported.
-    cmd = ('{0} {1}display csv {1}log logfile').format(cmd_base, tcli.TILDE*2)
+    cmd = ('{0} {1}display csv {1}log logfile').format(cmd_base, tcli.ESCAPE*2)
     (new_cmd, inline_tcli) = self.tcli_obj._ExtractInlineCommands(cmd)
     self.assertEqual(cmd_base, new_cmd)
     self.assertEqual('logfile', inline_tcli.log)
     self.assertEqual('csv', inline_tcli.display)
 
     # Invalid inline commands are assumed to be part of the commandline.
-    cmd = 'cat alpha{0}log {0}bogus {0}log filelist'.format(tcli.TILDE*2)
+    cmd = 'cat alpha{0}log {0}bogus {0}log filelist'.format(tcli.ESCAPE*2)
     (new_cmd, inline_tcli) = self.tcli_obj._ExtractInlineCommands(cmd)
-    self.assertEqual('cat alpha{0}log {0}bogus'.format(tcli.TILDE*2), new_cmd)
+    self.assertEqual('cat alpha{0}log {0}bogus'.format(tcli.ESCAPE*2), new_cmd)
     self.assertEqual('filelist', inline_tcli.log)
 
   def testExtractInlineExit(self):
 
     # Stops accidental parsing of command data.
-    cmd = 'cat alpha {}exit'.format(tcli.TILDE*2)
+    cmd = 'cat alpha {}exit'.format(tcli.ESCAPE*2)
     (new_cmd, inline_tcli) = self.tcli_obj._ExtractInlineCommands(cmd)
     self.assertEqual('cat alpha', new_cmd)
 
     # Stops accidental parsing of command data.
-    cmd = 'show {0}color {0}exit'.format(tcli.TILDE*2)
+    cmd = 'show {0}color {0}exit'.format(tcli.ESCAPE*2)
     (new_cmd, inline_tcli) = self.tcli_obj._ExtractInlineCommands(cmd)
-    self.assertEqual('show {}color'.format(tcli.TILDE*2), new_cmd)
+    self.assertEqual('show {}color'.format(tcli.ESCAPE*2), new_cmd)
 
     # inlines to the right of the exit are still parsed.
-    cmd = 'cat alpha {0}log boo {0}exit {0}log hoo'.format(tcli.TILDE*2)
+    cmd = 'cat alpha {0}log boo {0}exit {0}log hoo'.format(tcli.ESCAPE*2)
     (new_cmd, inline_tcli) = self.tcli_obj._ExtractInlineCommands(cmd)
-    self.assertEqual('cat alpha {}log boo'.format(tcli.TILDE*2), new_cmd)
+    self.assertEqual('cat alpha {}log boo'.format(tcli.ESCAPE*2), new_cmd)
     self.assertEqual('hoo', inline_tcli.log)
 
   def testExtractPipe(self):
@@ -708,14 +708,14 @@ class UnitTestTCLI(unittest.TestCase):
     with mock.patch.object(self.tcli_obj, 'TildeCmd'):
       with mock.patch.object(self.tcli_obj, 'CmdRequests') as mock_request:
         self.tcli_obj.ParseCommands(' cat alpha \n  %shelp \n\n\n%scolor  ' %
-                                    (tcli.TILDE, tcli.TILDE))
+                                    (tcli.ESCAPE, tcli.ESCAPE))
         mock_request.assert_called_once_with(
             self.tcli_obj.device_list,
             ['cat alpha'])
 
       with mock.patch.object(self.tcli_obj, 'CmdRequests') as mock_request:
         self.tcli_obj.ParseCommands(' cat alpha\n%scolor\n\nc alpha  ' %
-                                    tcli.TILDE)
+                                    tcli.ESCAPE)
         mock_request.assert_has_calls([
             mock.call(self.tcli_obj.device_list, ['cat alpha']),
             mock.call(self.tcli_obj.device_list, ['c alpha'])
@@ -726,7 +726,7 @@ class UnitTestTCLI(unittest.TestCase):
         self.tcli_obj.ParseCommands(
             'cat alpha\n\n bat alpha %sverbose on\n%scolor off\n\n'
             'cat theta  %slog buf\n\nc alpha' %
-            (tcli.TILDE*2, tcli.TILDE, tcli.TILDE*2))
+            (tcli.ESCAPE*2, tcli.ESCAPE, tcli.ESCAPE*2))
         mock_request.assert_has_calls([
             mock.call(self.tcli_obj.device_list, ['cat alpha']),
             mock.call(self.tcli_obj.device_list, ['c alpha'])
@@ -1057,7 +1057,7 @@ class UnitTestTCLI(unittest.TestCase):
     # A valid TILDE command.
     self.tcli_obj.TildeCmd('buffer hello')
     self.assertEqual(
-        'A test\nA two\nline test\n%sbuffer hello' % tcli.TILDE,
+        'A test\nA two\nline test\n%sbuffer hello' % tcli.ESCAPE,
         self.tcli_obj.buffers.GetBuffer('hello'))
 
     self.tcli_obj.record = None
@@ -1073,10 +1073,10 @@ class UnitTestTCLI(unittest.TestCase):
     self.assertIsNone(self.tcli_obj.recordall)
     self.tcli_obj.ParseCommands('A two\nline test')
     self.assertEqual(
-        '%slogall world\nA test' % tcli.TILDE,
+        '%slogall world\nA test' % tcli.ESCAPE,
         self.tcli_obj.buffers.GetBuffer('hello'))
     self.assertEqual(
-        'A test\n%slogstop hello\nA two\nline test' % tcli.TILDE,
+        'A test\n%slogstop hello\nA two\nline test' % tcli.ESCAPE,
         self.tcli_obj.buffers.GetBuffer('world'))
     self.assertEqual('world', self.tcli_obj.logall)
 
@@ -1130,7 +1130,7 @@ class UnitTestTCLI(unittest.TestCase):
     self.tcli_obj.TildeCmd('help')
     self.tcli_obj.TildeCmd('color')
     self.assertEqual(
-        'A test\nA two\nline test\n%scolor' % tcli.TILDE,
+        'A test\nA two\nline test\n%scolor' % tcli.ESCAPE,
         self.tcli_obj.buffers.GetBuffer('hello'))
 
   def testDisplayBufname(self):
@@ -1208,14 +1208,14 @@ class UnitTestTCLI(unittest.TestCase):
   def testTildeBufferRecursivePlay0(self):
     """Sanity check that buffer plays out."""
     with mock.patch.object(self.tcli_obj, 'ParseCommands') as mock_parse:
-      self.tcli_obj.buffers.Append('boo', '%scolor' % tcli.TILDE)
+      self.tcli_obj.buffers.Append('boo', '%scolor' % tcli.ESCAPE)
       self.tcli_obj.TildeCmd('play boo')
-      mock_parse.assert_called_once_with('%scolor' % tcli.TILDE)
+      mock_parse.assert_called_once_with('%scolor' % tcli.ESCAPE)
 
   def testTildeBufferRecursivePlay1(self):
     """Cannot make recursive or infinite calls to play out buffer."""
     with mock.patch.object(self.tcli_obj, '_PrintWarning') as mock_warning:
-      self.tcli_obj.buffers.Append('boo', '%splay boo' % tcli.TILDE)
+      self.tcli_obj.buffers.Append('boo', '%splay boo' % tcli.ESCAPE)
       self.tcli_obj.TildeCmd('play boo')
       mock_warning.assert_called_once_with(
           'Recursive call of "play" rejected.')
@@ -1224,7 +1224,7 @@ class UnitTestTCLI(unittest.TestCase):
     """Cannot assign buffer while playing out the content."""
     with mock.patch.object(self.tcli_obj, '_PrintWarning') as mock_warning:
       self.tcli_obj.buffers.Append('boo', '%srecordall boo\n%scolor' % (
-          tcli.TILDE, tcli.TILDE))
+          tcli.ESCAPE, tcli.ESCAPE))
       self.tcli_obj.TildeCmd('play boo')
       mock_warning.assert_called_once_with(
           "Buffer: boo, already open by 'play' command.")
@@ -1234,7 +1234,7 @@ class UnitTestTCLI(unittest.TestCase):
     """Cannot play from a buffer that is being recorded to."""
     with mock.patch.object(self.tcli_obj, '_PrintWarning') as mock_warning:
       self.tcli_obj.recordall = 'boo'
-      self.tcli_obj.buffers.Append('boo', '%scolor' % tcli.TILDE)
+      self.tcli_obj.buffers.Append('boo', '%scolor' % tcli.ESCAPE)
       self.tcli_obj.TildeCmd('play boo')
       mock_warning.assert_called_once_with(
           "Buffer: 'boo', already open for writing.")
@@ -1244,9 +1244,9 @@ class UnitTestTCLI(unittest.TestCase):
     with mock.patch.object(self.tcli_obj, '_PrintWarning') as mock_warning:
       self.tcli_obj.color = True
       self.tcli_obj.recordall = 'hoo'
-      self.tcli_obj.buffers.Append('boo', '%scolor' % tcli.TILDE)
+      self.tcli_obj.buffers.Append('boo', '%scolor' % tcli.ESCAPE)
       self.tcli_obj.TildeCmd('play boo')
-      self.assertEqual('%splay boo\n%scolor' % (tcli.TILDE, tcli.TILDE),
+      self.assertEqual('%splay boo\n%scolor' % (tcli.ESCAPE, tcli.ESCAPE),
                        self.tcli_obj.buffers.GetBuffer('hoo'))
       # Color value was toggled.
       self.tcli_obj.color = False
