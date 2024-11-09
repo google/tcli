@@ -43,7 +43,6 @@ Interactive TCLI starts in 'safe mode' - toggle off with '%sS' or '%ssafemode'.
 import copy
 import os
 import re
-import readline
 import subprocess
 import sys
 import tempfile
@@ -51,6 +50,8 @@ import threading
 
 from absl import flags
 from absl import logging
+from pyreadline3.rlmain import Readline
+readline = Readline()
 from tcli import command_parser
 from tcli import command_response
 from tcli import text_buffer
@@ -271,10 +272,8 @@ class Error(Exception):
   """Base class for errors."""
 
 
-# pylint: disable=g-bad-exception-name
 class TcliError(Error):
   """General TCLI error."""
-# pylint: enable=g-bad-exception-name
 
 
 class TcliCmdError(Error):
@@ -416,7 +415,7 @@ class TCLI(object):
       except ValueError:
         pass
 
-  def _SetPrompt(self):
+  def _SetPrompt(self, inv: inventory.Inventory) -> None:
     """Sets the prompt string with current targets."""
 
     safe = '*' if self.safemode else ''
@@ -425,12 +424,10 @@ class TCLI(object):
     (_, width) = terminal.TerminalSize()
     # Render, without replacing, the prompt to see if it will fit on a row.
     # Drop the target_str if that is not the case.
-    if (len(PROMPT_HDR % (
-        self.inventory.inclusions['targets'],
-        len(self.device_list), safe)) > width):
+    if (len(PROMPT_HDR % (inv.targets, len(self.device_list), safe)) > width):
       target_str = '#####'
     else:
-      target_str = self.inventory.targets
+      target_str = inv.targets
 
     self.prompt = PROMPT_HDR.format(
       terminal.AnsiText(target_str, self.system_color),
@@ -1180,10 +1177,8 @@ class TCLI(object):
 
     # Clear response dictionary to ignore outstanding requests.
     self.cmd_response = command_response.CmdResponse()
-    try:
-      self._SetPrompt()
-    except ValueError as error_message:
-      self._PrintWarning(str(error_message))
+    if self.inventory:
+      self._SetPrompt(self.inventory)
     # Print the main prompt, so the ASCII escape sequences work.
     print(self.prompt)
     # Stripped ASCII escape from here, as they are not interpreted in PY3.
