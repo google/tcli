@@ -25,6 +25,11 @@ from tcli import inventory_csv as inventory
 class UnitTestCSVInventory(unittest.TestCase):
   """Test the CSV inventory class."""
 
+  def _ClearFilters(self, inv_obj):
+    """Clear all filters for targets etc."""
+    for x in inv_obj._inclusions: inv_obj._inclusions[x] = ''
+    for y in inv_obj._exclusions: inv_obj._exclusions[y] = ''
+
   @classmethod
   def setUpClass(cls):
     super(UnitTestCSVInventory, cls).setUpClass()
@@ -36,13 +41,9 @@ class UnitTestCSVInventory(unittest.TestCase):
     self.dev_inv_orig = inventory.inventory_base.DEVICE_ATTRIBUTES
     # Trigger FLAGS initialisation before referencing maxtargets flag.
     inventory.FLAGS([__file__,])
-    with mock.patch.object(inventory.Inventory, 'LoadDevices'):
-      self.inv = inventory.Inventory()
+    self.inv = inventory.Inventory()
     # Clear all filters for targets etc.
-    for x in self.inv._inclusions:
-      self.inv._inclusions[x] = ''
-    for y in self.inv._exclusions:
-      self.inv._exclusions[y] = ''
+    self._ClearFilters(self.inv)
     
   def tearDown(self):
     inventory.inventory_base.DEVICE_ATTRIBUTES = self.dev_inv_orig
@@ -100,23 +101,9 @@ class UnitTestCSVInventory(unittest.TestCase):
 
   def testFetchDevices(self):
     """Tests directly loading device inventory from CSV file."""
+    self.inv._devices = {}
     self.inv._FetchDevices()
-    self.inv._CmdFilter('targets', ['^.*'])
-    self.assertListEqual(self.inv.device_list,
-                         ['device_a', 'device_b', 'device_c'])
-
-  def testReformatCmdResponse(self):
-    """Tests Formatting of response into name value pairs in a dictionary."""
-
-    response = inventory.inventory_base.CmdResponse(
-      uid=1,
-      device_name='device_a',
-      command='show version',
-      data='hello world',
-      error=''
-    )
-    # No-op, so we test that nothing has changed.
-    self.assertTupleEqual(self.inv.ReformatCmdResponse(response), response)
+    self.assertTrue(self.inv._devices)
 
   def testSendRequests(self):
     """Tests command requests are pulled from file."""

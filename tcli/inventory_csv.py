@@ -50,13 +50,13 @@ from tcli.inventory_base import InventoryError  # pylint: disable=unused-import
 ## Note: Two values will be created for each attribute. The second will be
 ## prefixed with an 'x' to be used for inverse matching (exclusions).
 DEVICE_ATTRIBUTES = inventory_base.DEVICE_ATTRIBUTES
-DEVICE_ATTRIBUTES['pop'] = inventory_base.DeviceAttribute(
+DEVICE_ATTRIBUTES['pop'] = inventory_base.Attribute(
     'pop', '', None,
     '\n    Limit device lists to specific pop/s', command_flag=True)
-DEVICE_ATTRIBUTES['realm'] = inventory_base.DeviceAttribute(
+DEVICE_ATTRIBUTES['realm'] = inventory_base.Attribute(
     'realm', 'lab', ['prod', 'lab'],
     '\n    Limit the device list to a specific realm/s.', command_flag=True)
-DEVICE_ATTRIBUTES['vendor'] = inventory_base.DeviceAttribute(
+DEVICE_ATTRIBUTES['vendor'] = inventory_base.Attribute(
     'vendor', '', ['cisco', 'juniper'],
     '\n    Limit device lists to a specific vendor/s', display_case='title',
     command_flag=True)
@@ -103,21 +103,6 @@ class Inventory(inventory_base.Inventory):
   """
 
   SOURCE = 'csv'
-
-  ############################################################################
-  # Methods related to registering/executing CLI command extensions.         #
-  ############################################################################
-
-  def _ShowEnv(self):
-    """Extends show environment to display CSV specific values in TCLI."""
-
-    # The extra attribute filters get picked up automatically.
-    # So we call the parent unchanged.
-    return super(Inventory, self)._ShowEnv()
-
-  ############################################################################
-  # Methods related to managing and serving the device inventory.            #
-  ############################################################################
 
   def _ParseDevicesFromCsv(self, buf, separator=','):
     """Parses buffer into tabular format.
@@ -213,35 +198,8 @@ class Inventory(inventory_base.Inventory):
       logging.debug('Reading device inventory for file "%s".', FLAGS.inventory)
       self._devices = self._ParseDevicesFromCsv(csv_file)
 
-  ############################################################################
-  # Methods related to sending commands and receiving responses from devices.#
-  ############################################################################
-
-  def _ReformatCmdResponse(self, response):
-    """Formats command response into name value pairs in a dictionary.
-
-    The device manager specific format of the response is transformed into a
-    more generic dictionary format:
-
-      {
-        'device_name': Device name string
-        'device': Corresponding entry for the device in the device inventory.
-        'command': Command string issued to device
-        'error': Optional error message string
-        'data': Command response string, null if error string populated.
-      }
-
-    Args:
-      response: device manager response object for a single device with a
-                uid that corresponds to uid of original request.
-    Returns:
-      Dictionary representation of command response.
-    """
-
-    # No-Op as response if already formatted correctly by _SendRequests.
-    return response
-
-  def _SendRequests(self, requests_callbacks, deadline=None):
+  def _SendRequests(
+      self, requests_callbacks: tuple, deadline: float|None=None) -> None:
     """Submit command requests to device connection service."""
 
     for (request, callback) in requests_callbacks:
@@ -249,15 +207,6 @@ class Inventory(inventory_base.Inventory):
       # Effective in cases where device access is controlled by a service.
       # Here we simply open a file with canned responses and return them
       # iteratively.
-      # Command response message format:
-      # {
-      #   'uid' : Unique identifier for command
-      #   'device_name': Device name string
-      #   'device': Corresponding entry for the device in the device inventory.
-      #   'command': Command string issued to device
-      #   'error': Optional error message string
-      #   'data': Command response string, null if error string populated.
-      # }
 
       # Rather than canned responses, users should make use of a device accessor
       # library such as:

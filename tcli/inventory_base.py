@@ -84,21 +84,20 @@ DEVICE_ATTRIBUTES = {}
 # The single device entry in the inventory. Set in child module.
 DEVICE = None
 
-# TODO(harro): Define CmdRequest here too?
 # Data format of response.
 CmdResponse = collections.namedtuple(
     'CmdResponse', ['uid', 'device_name', 'command', 'data', 'error'])
 
 FLAGS = flags.FLAGS
 
+flags.DEFINE_integer(
+    'maxtargets', DEFAULT_MAXTARGETS,
+    TILDE_COMMAND_HELP['maxtargets'])
+
 flags.DEFINE_string(
     'targets', '',
     TILDE_COMMAND_HELP['targets'],
     short_name='T')
-
-flags.DEFINE_integer(
-    'maxtargets', DEFAULT_MAXTARGETS,
-    TILDE_COMMAND_HELP['maxtargets'])
 
 flags.DEFINE_string(
     'xtargets', DEFAULT_XTARGETS,
@@ -118,131 +117,118 @@ class InventoryError(Error):
   """General Inventory error."""
 
 
-class DeviceAttribute(object):
-  """Container for holding attribute of device and its associated values."""
+class Attribute(object):
+  """Object for device attributes to be used as cli commands for filtering."""
+  type Case = typing.Union[typing.Literal['lower'],
+                           typing.Literal['upper'],
+                           typing.Literal['title']]
 
-  def __init__(self, attrib_name, default_value, valid_values, help_str,
-               display_case='lower', command_flag=False):
-    self._default_value = default_value
+  #TODO(harro): Use getters / setters here an hide internals.
+  def __init__(
+      self, name: str, default_value: str, valid_values: list[str] | None,
+      help_str: str, display_case: Case='lower', command_flag: bool=False):
+    self._default = default_value
     self.help_str = help_str
-    self.attrib_name = attrib_name
+    self.name = name
     self.valid_values = valid_values
     self.display_case = display_case
     self.command_flag = command_flag
     if self.command_flag:
-      flags.DEFINE_string(self.attrib_name, default_value, help_str)
+      flags.DEFINE_string(self.name, default_value, help_str)
 
   def _GetDefault(self):
-    if self.command_flag and hasattr(flags, self.attrib_name):
-      return getattr(flags, self.attrib_name)
+    if self.command_flag and hasattr(flags, self.name):
+      return getattr(flags, self.name)
     else:
-      return self._default_value
+      return self._default
 
   default_value = property(_GetDefault)
 
 
 class Inventory(object):
-  """ADT Class for device inventory retrieval and command submission.
+  """Base class for device inventory retrieval and command submission.
 
-  Public classes should not require modification and should not be referenced
-  directly here. They are simply thread safe wrappers for the private methods
-  of the same name.
-
+  To be subclassed and customised for the users environment.
   Source specific instantiations of the class should replace private methods.
 
   Attributes:
-    batch: Bool indicating that the inventory is being used non interactively.
     devices: A dict (keyed by string) of Device objects. Read-only.
     device_list: Array of device names satisfying the filters.
     source: String identifier of source of device inventory.
   """
   SOURCE = 'unknown'
 
-  class Request(object):
-    """Holds a request named dictionary and wrapped with a uid."""
-    UID = 0    # Each request has an identifier
-
-    def __init__(self):
-      Inventory.Request.UID += 1
-      self.uid = Inventory.Request.UID
-      self.target = ''
-      self.command = ''
-      self.mode = ''
-
-  def __init__(self, batch=False):
-    """Initialise thread safe access to data to support async calls."""
-
-    self.batch = batch
-    # Devices keyed on device name.
-    # Each value is a dictionary of attribute/value pairs.
-    # If we have already loaded the devices, don't do it again.
-    if not hasattr(self, '_devices'):
-      self._devices = {}
-    # List of device names.
-    self._device_list = None
-    # Filters and exclusions added by this library.
-    self._inclusions = {'targets': ''}
-    self._exclusions = {'xtargets': ''}
-    # Store literal strings and compiled regexps in dedicated dictionary
-    # Use to accelerate matching against devices when buidling device_list
-    self._literals_filter = {}
-    self._compiled_filter = {}
-    self._lock = threading.Lock()
-    self._devices_loaded = threading.Event()
-    self._devices_loaded.set()
-    self._maxtargets = FLAGS.maxtargets
-
-    # Filters and exclusions added by this library.
-    logging.debug('Device attributes statically defined: "%s".',
-                  DEVICE_ATTRIBUTES)
-    for attr in DEVICE_ATTRIBUTES:
-      if attr == 'flags':
-        # TODO(harro): Add support for filtering on flag values.
-        continue
-      self._inclusions[attr] = ''
-      self._exclusions['x' + attr] = ''
-
-    if not batch:
-      # Load full device inventory (once) if we are interactive.
-      self.LoadDevices()
-      logging.debug('Device inventory load triggered for interactive mode.')
-
-  ############################################################################
-  # Thread safe public methods and properties.                               #
-  ############################################################################
-
-  def CreateCmdRequest(self, target, command, mode):
-    """Creates command request for sending to device manager.
+  class CmdRequest(object):
+    """Request object to be sent to the external device accessor service.
 
     The command request object created should satisfy the format required
-    by the device manager in order to retrieve the command result from a device.
+    by the device manager that retrieves the command results.
 
     Each request object must be assigned a unique 'uid' attribute - unique
-    within the context of all pending requests and all requests that have not
+    within the context of all pending requests, and all requests that have not
     yet been rendered to the user. The device manager may generate this ID,
-    otherwise CreateCmdRequest may add it. We have no way of determining
-    if a result has been displayed (and the uid freed) however something like
-    a monotomically increasing 32bit number would suffice.
+    otherwise we add it here. We have no way of determining if a result has
+    been displayed (and the uid freed) so a monotomically increasing 32bit
+    number would suffice.
 
     Some devices support multiple commandline modes or CLI interpretors
     e.g. router CLI and sub-system unix cli.
-    The mode can be used by the device manager to execute the command on the
-    appropriate CLI.
 
     Args:
       target: device to send command to.
       command: string single commandline to send to each device.
-      mode: commandline mode to submit the command to.
+      mode: commandline mode on device to submit the command to.
     Returns:
       List of request objects.
     """
-    with self._lock:
-      return self._CreateCmdRequest(target, command, mode)
 
-  def GetDevices(self):
-    """Loads Devices from external store.
+    UID = 0    # Each request has an identifier
 
-    Stores data in _devices in a format like:
+    def __init__(self, target: str, command: str, mode: str='cli') -> None:
+      Inventory.CmdRequest.UID += 1
+      self.uid = Inventory.CmdRequest.UID
+      self.target = target
+      self.command = bytes(command, 'utf-8').decode('unicode_escape')
+      self.mode = mode
+
+  def __init__(self):
+    """Initialise thread safe access to data to support async calls."""
+
+    self._getter_lock = threading.Lock()
+    self._load_lock = threading.Lock()
+    self._loaded = threading.Event()
+    self._loaded.set()
+    # Devices keyed on device name.
+    # If we have already loaded devices e.g. copy, don't do it again.
+    if not hasattr(self, '_devices'):
+      self._devices: dict = {}
+      # Load device inventory from external source.
+      self.Load()
+    # List of device names.
+    #TODO(harro): Lazy rebuild by assigning None - Maybe a setter is better?
+    self._device_list: list[str] | None = None
+    self._filters: dict[str, FilterMatch] = {}
+    self._maxtargets: int = FLAGS.maxtargets
+
+    # Filters and exclusions added by this library.
+    # We always have "targets", which is matched against the device name.
+    self._inclusions: dict[str, str] = {'targets': ''}
+    self._exclusions: dict[str, str] = {'xtargets': ''}
+    # Filters and exclusions added by this library.
+    logging.debug(
+      f'Device attributes statically defined: "{DEVICE_ATTRIBUTES}".')
+    #TODO(harro): Compare against reserved words and raise exception if a dup.
+    for attr in DEVICE_ATTRIBUTES:
+      # TODO(harro): Add support for filtering on flag values.
+      if attr == 'flags': continue
+      self._inclusions[attr] = ''
+      self._exclusions['x' + attr] = ''
+
+  @property
+  def devices(self) -> dict[str, typing.NamedTuple]:
+    """Returns Devices from external store.
+
+    Stores data in _devices in a dictionary of NamedTuples like:
     {'devicename1: Device(attribute1='value1',
                           attribute2='value2',
                           ... ),
@@ -251,53 +237,46 @@ class Inventory(object):
      ...
     }
     """
-  
-    with self._lock:
-      return self._GetDevices()
+    with self._getter_lock:
+      # Wait for any pending device loading.
+      self._loaded.wait()
+      if not self._devices:
+        raise InventoryError(
+            'Device inventory data failed to load or no devices found.')
+      return self._devices.copy()
 
-  def GetDeviceList(self):
+  @property
+  def device_list(self):
     """Returns a filtered list of Devices."""
-    with self._lock:
-      return self._GetDeviceList()
+    with self._getter_lock:
+      # 'None' means the list needs to be built first.
+      if self._device_list is None: return self._BuildDeviceList()
+      return self._device_list.copy()
 
-  # TODO(harro): Remove this, we should only need GetDevices.
-  def LoadDevices(self):
-    """Loads Devices from external store.
+  @property
+  def inclusions(self):
+    return self._inclusions.copy()
 
-    Stores data in _devices in a format like:
-    {'devicename1: Device(attribute1='value1',
-                          attribute2='value2',
-                          ... ),
-     'devicename2: Device('attribute1='value3',
-                          ... ),
-     ...
-    }
-    """
+  @property
+  def exclusions(self):
+    return self._exclusions.copy()
+  
+  # pylint: disable=protected-access
+  targets = property(lambda self: self._inclusions['targets'].copy())
 
-    with self._lock:
-      self._BuildDeviceData()
+  def Load(self) -> None:
+    """Loads Devices inventory from external store."""
 
-  def ReformatCmdResponse(self, response):
-    """Formats command response into name value pairs in a dictionary.
-
-    The device manager specific format of the response is transformed into a
-    more generic dictionary format:
-
-      {
-        'device_name': Device name string
-        'device': Corresponding entry for the device in the device inventory.
-        'command': Command string issued to device
-        'error': Optional error message string
-        'data': Command response string, null if error string populated.
-      }
-
-    Args:
-      response: device manager response object for a single device with a
-                uid that corresponds to uid of original request.
-    Returns:
-      Dictionary representation of command response.
-    """
-    return self._ReformatCmdResponse(response)
+    # Block additional requests until completed.
+    self._load_lock.acquire()
+    # Block reads of the devices until loaded.
+    self._loaded.clear()
+    # Collect result in a thread so it can complete in the background.
+    # Threading here is helpful if device inventory is large.
+    self._devices_thread = threading.Thread(name='Device loader',
+                                            target=self._AsyncLoad,
+                                            daemon=True)
+    self._devices_thread.start()
 
   def RegisterCommands(self, cmd_register):
     """Add module specific command support to TCLI."""
@@ -308,7 +287,7 @@ class Inventory(object):
                                  inline=True, short_name='A',
                                  handler=self._AttributeFilter,
                                  # TODO(harro): Change completer.
-                                 completer=self._CmdFilterCompleter) 
+                                 completer=self._CmdFilterCompleter)
     cmd_register.RegisterCommand('targets', TILDE_COMMAND_HELP['targets'],
                                  append=True, regexp=True, inline=True,
                                  short_name='T', default_value=FLAGS.targets,
@@ -330,11 +309,11 @@ class Inventory(object):
 
     # Register commands specific to this inventory source.
     for attribute in DEVICE_ATTRIBUTES.values():
-      if attribute.command_flag and attribute.attrib_name in FLAGS:
-        default_value = getattr(FLAGS, attribute.attrib_name)
+      if attribute.command_flag and attribute.name in FLAGS:
+        default_value = getattr(FLAGS, attribute.name)
       else:
         default_value = attribute.default_value
-      cmd_register.RegisterCommand(attribute.attrib_name,
+      cmd_register.RegisterCommand(attribute.name,
                                    attribute.help_str,
                                    default_value=default_value,
                                    append=True, inline=True, regexp=True,
@@ -351,9 +330,6 @@ class Inventory(object):
     As command results from devices are collected then the callback function
     is to be executed by the device manager.
 
-    The response object structure is unspecified but corresponds to a response
-    from a single device and must be parsable by ReformatCmdResponse.
-
     Args:
       requests_callbacks: List of tuples.
         Each tuple pairs a request object with a callback function.
@@ -364,23 +340,27 @@ class Inventory(object):
     return self._SendRequests(requests_callbacks, deadline=deadline)
 
   def ShowEnv(self):
-    """Show command settings."""
-    with self._lock:
-      return self._ShowEnv()
+    """Show inventory attribute filter settings."""
 
-  # Obtains devices when they have been loaded.
-  devices = property(GetDevices)
-  # Returns a sorted list targets.
-  device_list = property(GetDeviceList)
-  # pylint: disable=protected-access
-  targets = property(lambda self: self._inclusions['targets'])
+    indent = ' '*2
+    # Add headline to indicate this display section is from this module.
+    display_string = ['Inventory:']
+    display_string.append(f'{indent}Max Targets: {self._maxtargets}')
+    # Sub section for Filters and Exclusions.
+    display_string.append(f'{indent}Filters:')
+    # Assumes that for every inclusion there is a corresponding exclusion.
+    for incl, excl in zip(sorted(self._inclusions), sorted(self._exclusions)):
+      # Create paired entries like 'Targets: ..., XTargets: ...'
+      display_string.append(
+        f'{indent*2}' +
+        self._FormatLabelAndValue(incl, self._inclusions[incl]) +
+        ', ' +
+        self._FormatLabelAndValue(excl, self._exclusions[excl], caps=2)
+        )
 
-  ############################################################################
-  # Methods related to registering/executing TCLI CLI command extensions.    #
-  ############################################################################
+    return '\n'.join(display_string) + '\n'
 
   # Command handlers have identical arguments.
-  # pylint: disable=unused-argument
   def _CmdFilterCompleter(self, word_list, state):
     """Returns a command completion list for valid attribute completions."""
 
@@ -405,45 +385,8 @@ class Inventory(object):
     else:
       return None
 
-  def _CmdFilter(self, command_name: str, args: list[str], append=False) -> str:
-    """Updates or displays target device inventory filter.
-
-    Args:
-      command_name: Command entered by the user (minus tilde prefix).
-      args: list of positional args after the command.
-      append: bool indicating that filters args are to be appended.
-    Returns:
-      String to display.
-    Raises:
-      ValueError: If called on unknown attribute.
-    """
-
-    if not (command_name in self._inclusions or 
-            command_name in self._exclusions):
-      raise ValueError('Command "%s" invalid.' % command_name)
-
-    # Filter may be inclusive, or exclusive.
-    if command_name in self._inclusions:
-      filters = self._inclusions
-      # Do we want to captialise the first one or two characters.
-      caps = 1
-    else:
-      filters = self._exclusions
-      caps = 2
-
-    if not args:
-      return self._FormatLabelAndValue(
-          command_name, filters[command_name], caps=caps)
-
-    filter_string = args[0]   # TDOD(harro): Raise exception is args >1 ?
-    # Appending a new filter string to an existing filter.
-    if append and filter_string and filters[command_name]:
-      filter_string = ','.join([filters[command_name], filter_string])
-    #TDOD(harro): Replace _ChangeFilter with _AttributeFilter.
-    filters[command_name] = self._ChangeFilter(command_name, filter_string)
-    return ''
-
-  def _AttributeFilter(self, command_name: str, args: list[str], append=False) -> str:
+  def _AttributeFilter(
+      self, command_name: str, args: list[str], append:bool=False) -> str:
     """Updates or displays the inventory inclusions or exclusions (filters).
 
     Args:
@@ -456,27 +399,81 @@ class Inventory(object):
     """
 
     if command_name not in ('attributes', 'xattributes'):
-      raise ValueError('Command "%s" invalid.' % command_name)
-
-    if args:
-      # Update attribute filter/s.
-      # TODO(harro): Can we set multiple attributes here by splitting the list?
+      raise ValueError(f'Command "{command_name}" invalid.')
+    
+    # Display values of all device attribute filters.
+    if not args:
+      result = ''
       if command_name == 'attributes':
-        self._CmdFilter(args[0], args[1 :], append)
-      else:
-        # 'xattributes' so add 'x' prefix to corresponding attribute.
-        self._CmdFilter('x' + args[0], args[1 :], append)
+        attr_list = self._inclusions
+      else: # xattributes
+        attr_list = self._exclusions
+      for attr in attr_list:
+        result += self._CmdFilter(attr, [], append)
+      return result
+
+    # Update attribute filter/s.
+    # TODO(harro): Can we set multiple attributes here by splitting the list?
+    if command_name == 'attributes':
+      self._CmdFilter(args[0], args[1 :], append)
+    else:
+      # 'xattributes' so add 'x' prefix to corresponding attribute.
+      self._CmdFilter('x' + args[0], args[1 :], append)
+    return ''
+  
+  def _CmdFilter(
+      self, command_name: str, args: list[str], append:bool=False) -> str:
+    """Updates or displays target device inventory filter.
+
+    Args:
+      command_name: Command entered by the user (minus tilde prefix).
+      args: list of positional args after the command.
+      append: bool indicating that filters args are to be appended.
+    Returns:
+      String to display.
+    Raises:
+      ValueError: If called on unknown attribute.
+    """
+
+    if (command_name not in self._inclusions and
+        command_name not in self._exclusions):
+      raise ValueError(f'Command "{command_name}" invalid.')
+
+    # Filter may be inclusive, or exclusive.
+    if command_name in self._inclusions:
+      filters = self._inclusions
+      caps = 1    # Capitalise the first character.
+    else:
+      filters = self._exclusions
+      caps = 2    # Capitalise the two characters.
+
+    # No args, so display current value/s.
+    if not args:
+      return self._FormatLabelAndValue(
+          command_name, filters[command_name], caps=caps)
+
+    filter_string = args[0]   # TODO(harro): Raise exception is args >1 ?
+    if filter_string in ('^', '^$'):
+      del(self._filters[command_name])
+      filters[command_name] = ''
+      # Clear device list to trigger re-application of filter.
+      self._device_list = None
       return ''
 
-    # Display values of all device attribute filters.
-    result = ''
-    if command_name == 'attributes':
-      attr_list = self._inclusions
-    else: # xattributes
-      attr_list = self._exclusions
-    for attr in attr_list:
-      result += self._CmdFilter(attr, [], append)
-    return result
+    # Appending a new filter string to an existing filter.
+    if append and filter_string and filters[command_name]:
+      filter_string = ','.join([filters[command_name], filter_string])
+    #TODO(harro): Pass in ignorecase flag, add to class __ini__.
+    _filter = FilterMatch(filter_string)
+    if not self.ValidFilter(command_name, _filter.filters[0]):
+      raise ValueError(
+        f'Non-regexp filter entry "{_filter.filters[0]}" is not valid.')
+
+    self._filters[command_name] = _filter
+    filters[command_name] = filter_string
+    # Clear device list to trigger re-application of filter.
+    self._BuildDeviceList()
+    return ''
 
   def _CmdMaxTargets(self, command_name: str, args: list[str], append=False) -> str:
     """Updates or displays maxtargets filter.
@@ -499,13 +496,12 @@ class Inventory(object):
       if maxtargets < 0:
         raise ValueError
     except ValueError:
-      raise ValueError('Max Targets is a non-cardinal value: "%s"' % maxtargets)
+      raise ValueError(f'Max Targets is a non-cardinal value: "{maxtargets}."')
 
     self._maxtargets = maxtargets
     return ''
-  # pylint: enable=unused-argument
 
-  def _Flatten(self, container):
+  def _Flatten(self, container: list|tuple):
     """Flattens arbitrarily deeply nested lists."""
 
     for i in container:
@@ -515,7 +511,7 @@ class Inventory(object):
       else:
         yield i
 
-  def _ChangeFilter(self, filter_name, arg):
+  def ValidFilter(self, filter_name, literals):
     """Update inventory filter.
 
     Sets the new value for the filter string. Only called against valid
@@ -523,174 +519,50 @@ class Inventory(object):
 
     Args:
       filter_name: str filter or exclusion name.
-      arg: str new value for filter.
+      literals: list of literals in the filter.
     Raises:
       ValueError: If literal device name specified and device is unknown.
     Returns:
-      The filter string 'arg'.
+      Bool The filter string 'arg'.
     """
 
-    # Clearing a filter requires no content validation.
-    if not arg or arg in ('^', '^$'):
-      arg = ''
-      (literals, compiled) = (None, None)
+    #TODO(harro): Add support for regexp validation.
+    if not literals: return True
+
+    attribute = filter_name
+    # Trim off the 'x' prefix for matching exclusions against attributes.
+    if filter_name.startswith('x'):
+      attribute = filter_name[1 :]
+
+    if attribute == 'targets':
+      # Warn user if literal is unknown.
+      validate_list = self.devices
+    elif (attribute in DEVICE_ATTRIBUTES and
+          DEVICE_ATTRIBUTES[attribute].valid_values):
+      validate_list = DEVICE_ATTRIBUTES[attribute].valid_values
     else:
-      # Split the string into literal and regexp elements.
-      # Filter matching is case insensitive.
-      (literals, compiled) = self._DecomposeFilter(arg, ignore_case=True)
+      # Without a specific list of valid values, check that at least one
+      # device matches.
+      # TODO(harro): For filter responsiveness reasons we may drop this.
+      validate_list = [getattr(dev, attribute, None)
+                        for dev in self.devices.values()]
+      validate_list = set(self._Flatten(validate_list))
 
-      if not self.batch and literals:
-        attribute = filter_name
-        # Trim off the 'x' prefix for matching exclusions against attributes.
-        if filter_name.startswith('x'):
-          attribute = attribute[1 :]
+    validate_list = [value.lower() for value in validate_list]
 
-        if attribute == 'targets':
-          # Warn user if literal is unknown, skip warning in batch mode
-          # as it is less valuable in this context and would trigger a
-          # re-retrieval of the inventory.
-          validate_list = self._GetDevices()
-
-        elif (attribute in DEVICE_ATTRIBUTES and
-              DEVICE_ATTRIBUTES[attribute].valid_values):
-          validate_list = DEVICE_ATTRIBUTES[attribute].valid_values
-        else:
-          # Without a specific list of valid values, check that at least one
-          # device matches.
-          # TODO(harro): For filter responsiveness reasons we may drop this.
-          validate_list = [getattr(dev, attribute, None)
-                           for dev in self._GetDevices().values()]
-          validate_list = set(self._Flatten(validate_list))
-
-        validate_list = [value.lower() for value in validate_list]
-
-        # Confirm that static content matches a valid entry.
-        unmatched_literals = set(literals).difference(set(validate_list))
-        if unmatched_literals:
-          raise ValueError('Non-regexp filter entry "%s" is not valid.' %
-                           unmatched_literals)
-
-    self._ChangeDeviceListFilters(filter_name, literals, compiled)
-    return arg
-
-  def _ChangeDeviceListFilters(self, filter_name, literals, compiled):
-    """Assigns values to filters used to derive the device_list.
-
-    Store the literal device names and compiled regular expressions
-    in respective dictionary.
-
-    Clear the device_list so the next time it is queried it will be rebuilt
-    from these newly updated filter content.
-
-    Args:
-      filter_name: str filter or exclusion name.
-      literals: list of strings that represent individual devices.
-      compiled: List of compiled regular expressions.
-    """
-
-    # Shared dictionaries for filters and exclusions.
-    self._literals_filter[filter_name] = literals
-    self._compiled_filter[filter_name] = compiled
-    # Clear device list to trigger re-application of filter.
-    self._device_list = None
-
-  def _DecomposeFilter(self, filter_string, ignore_case=False):
-    """Returns a tuple of compiled and literal lists.
-
-    For device names, they are case insensitive so the compiled
-    regular expressions ignores case.
-
-    Args:
-      filter_string: str filter supplied by the user
-      ignore_case: bool for if the newly compiled regexps should ignore case.
-    Raises:
-      ValueError if a regexp is not valid.
-    Returns:
-      Tuple of lists to use in matching operations.
-    """
-
-    literal_match = []
-    re_match = []
-    for filter_item in filter_string.split(','):
-      # Spaces have no meaning, as filters never have spaces in them.
-      filter_item = filter_item.strip()
-      if filter_item:
-        if filter_item.startswith('^'):
-          # Add implicit '$' to regexp.
-          if not filter_item.endswith('$'):
-            filter_item += '$'
-          try:
-            # Filter expressions are case insensitive.
-            if ignore_case:
-              re_match.append(re.compile(filter_item, re.IGNORECASE))
-            else:
-              re_match.append(re.compile(filter_item))
-          except re.error:
-            raise ValueError('Argument regexp %r is invalid' % filter_item)
-        else:
-          if ignore_case:
-            literal_match.append(filter_item.lower())
-          else:
-            literal_match.append(filter_item)
-
-    return (literal_match, re_match)
+    # Confirm that static content matches a valid entry.
+    unmatched_literals = set(literals).difference(set(validate_list))
+    return False if unmatched_literals else True
 
   def _FormatLabelAndValue(self, label, value, caps=1):
-    """Returns string with capitilized label and corresponding value."""
+    """Returns string with titlecase label and corresponding value."""
 
-    if caps > len(label):
-      caps = len(label)
-    label = label[0:caps].upper() + label[caps :]
-    return '%s: %s' % (label, value)
+    caps = min(caps, len(label))
+    # Capitalise the prefix.
+    label = label[:caps].upper() + label[caps :]
+    return f'{label}: {value}'
 
-  def _ShowEnv(self):
-    """Extends show environment to display filters and exclusions."""
-
-    indent = '  '
-    # Add headline to indicate this display section is from this module.
-    display_string = ['Inventory:']
-    display_string.append(indent + 'Max Targets: %d' % self._maxtargets)
-    # Sub section for Filters and Exclusions.
-    display_string.append(indent + 'Filters:')
-    # Increase indent.
-    indent += '  '
-    # TODO(harro): Will break a filter doesn't have corresponding exclusion.
-    for f, x in zip(sorted(self._inclusions), sorted(self._exclusions)):
-      # Create paired entries like 'Targets: ..., XTargets: ...'
-      display_string.append('%s%s, %s' % (
-          indent,
-          self._FormatLabelAndValue(f, self._inclusions[f]),
-          self._FormatLabelAndValue(x, self._exclusions[x], caps=2)))
-
-    return '\n'.join(display_string) + '\n'
-
-  ############################################################################
-  # Methods related to building, managing and serving the device inventory.  #
-  ############################################################################
-
-  def _GetDevices(self) -> dict[str, typing.NamedTuple]:
-    """Returns a dict of Device objects. Blocks until devices have loaded."""
-
-    if self.batch and not self._devices:
-      # In batch mode we retrieve the devices from backend each time.
-      self._BuildDeviceData()
-      logging.debug('GetDevices: triggered load of devices.')
-
-    # Wait for any pending device load.
-    self._devices_loaded.wait()
-    if not self._devices:
-      raise InventoryError(
-          'Device inventory data failed to load or no devices found.')
-    return self._devices
-
-  def _GetDeviceList(self) -> list[str]:
-    """Returns a list of Device names."""
-
-    # A value of 'None' means the list needs to be built first.
-    if self._device_list is not None:
-      return self._device_list
-    return self._BuildDeviceList()
-
+  #TODO(harro): If we flip the exclude/include logic, is this cleaner?
   def _FilterMatch(self, devicename: str, device_attrs: typing.NamedTuple,
                    exclude=False) -> bool:
     """Returns true if device matches the inclusion/exclusion filter."""
@@ -701,7 +573,7 @@ class Inventory(object):
       # Blank filters are ignored.
       if not filter[attr]:
         continue
-      
+
       # For xtargets we match on device name as the attributes value.
       if attr == prefix + 'targets':
         attr_value = devicename
@@ -713,7 +585,10 @@ class Inventory(object):
         if not attr_value:
           continue
 
-      matched = self._Match(attr, attr_value)
+      if attr not in self._filters:
+        matched = False
+      else:
+        matched = self._filters[attr].Match(attr_value)
       # For exclusion, exclude as soon as one matches.
       if exclude:
         if matched:
@@ -738,96 +613,139 @@ class Inventory(object):
       ValueError: if size of device list exceeds max targets limit.
     """
 
-    self._device_list = []
-    # Special case, a null targets expression doesn't match any devices.
+    # Special case, treatment of the null case for 'targets' is the inverse.
+    # In other words, a null 'targets' expression doesn't match any devices.
     if not self._inclusions['targets']:
+      self._device_list = []
       return self._device_list
 
-    device_list = []
-    for (devicename, d) in self._GetDevices().items():
+    d_list = []
+    for (devicename, d) in self.devices.items():
       # Skip devices that match any non-blank exclusions.
       if self._FilterMatch(devicename, d, exclude=True):
         continue
 
       # Include devices that match all filters (blank is a match).
       if self._FilterMatch(devicename, d):
-        device_list.append(devicename)
+        d_list.append(devicename)
 
-    if self._maxtargets and len(device_list) > self._maxtargets:
-      raise ValueError('Target list exceeded Maximum targets limit of: %s.' %
-                       self._maxtargets)
+    # Raise error if number of matches exceeds the maximum set by user.
+    if self._maxtargets and len(d_list) > self._maxtargets:
+      raise ValueError(
+        f'Target list exceeded Maximum targets limit of: {self._maxtargets}.')
 
     # Cache the result.
-    self._device_list = device_list
-    logging.debug('Device List length: %d', len(self._device_list))
+    self._device_list = d_list
+    logging.debug(f'Device List length: {len(self._device_list)}')
     return self._device_list
 
-  def _AsyncBuildDeviceData(self) -> None:
+  def _AsyncLoad(self) -> None:
+    """Wrapper for calling FetchDevices from withing a thread."""
+
     try:
       self._FetchDevices()
+      logging.info('Fetching of devices completed.')
     finally:
-      self._devices_loaded.set()
+      self._load_lock.release()
+      # Let pending getters know the data is ready.
+      self._loaded.set()
 
-  def _FetchDevices(self) -> typing.Never:
+  def _FetchDevices(self) -> None|NotImplementedError:
     """Fetches Devices from external store ."""
-
     raise NotImplementedError
 
-  def _BuildDeviceData(self) -> None:
-    """Loads Devices from external store."""
+  def _SendRequests(
+      self, requests_callbacks:tuple, deadline:float|None=None
+      ) -> None|NotImplementedError:
+    """Submit command requests to device manager."""
+    raise NotImplementedError
 
-    # Wait for any pending load to complete.
-    self._devices_loaded.wait()
-    # Block reads of the devices until loaded.
-    self._devices_loaded.clear()
-    # Collect result in a thread so it can complete in the background.
-    self._devices_thread = threading.Thread(name='Device loader',
-                                            target=self._AsyncBuildDeviceData,
-                                            daemon=True)
-    self._devices_thread.start()
+class FilterMatch(object):
+  """Object for filter string decomposition and matching against values."""
 
-  def _Match(self, attr: str, attr_value: str | list[str] | list[list[str]]) -> bool:
-    """Returns if a attribute value matches the corresponding filter."""
+  def __init__(self, filter_string: str, ignorecase: bool=True) -> None:
+    # Literal strings and compiled regexps keyed on attribute name.
+    self._Set(filter_string, ignorecase)
+
+  @property
+  def filters(self) -> tuple:
+    return (self._literals, self._compiled)
+
+  def _Set(self, filter_string: str, ignore_case: bool) -> None:
+    """Assigns values to filters.
+
+    Store the literal values and compiled regular expressions in their
+    respective dictionaries.
+
+    Args:
+      filter_string: str to use as the basis of the filters.
+    """
+
+    # Split the string into literal and regexp elements.
+    (self._literals, self._compiled) = self._DecomposeString(
+      filter_string, ignore_case)
+
+  def _DecomposeString(
+      self, filter_string: str, ignore_case: bool) -> tuple:
+    """Returns a tuple of lists of compiled and literal strings for matching.
+
+    Args:
+      filter_string: str comma separated substrings to use for filtering.
+      ignore_case: bool to cononalise to lowercase or regexp ignores case.
+    Raises:
+      ValueError if a substring is indicated as a regexp but is not valid.
+    Returns:
+      Tuple of lists to use in filtering operations.
+    """
+
+    literal_substrs, re_substrs = [], []
+    # Note we accept only a subset of RFC 4180 and do not support enclosing
+    # in double double quotes
+    # https://www.ietf.org/rfc/rfc4180.txt
+    for substring in filter_string.split(','):
+      # Trim excess space from around a substring..
+      substring = substring.strip()
+      if substring:
+        # regexp style matches always start with '^'.
+        if substring.startswith('^'):
+          # Add implicit '$' to regexp.
+          if not substring.endswith('$'):
+            substring += '$'
+          try:
+            if ignore_case:
+              re_substrs.append(re.compile(substring, re.IGNORECASE))
+            else:
+              re_substrs.append(re.compile(substring))
+          except re.error:
+            raise ValueError(f'The filter regexp "{substring}" is invalid.')
+        else:
+          if ignore_case:
+            # Canonalise to all lowercase.
+            literal_substrs.append(substring.lower())
+          else:
+            literal_substrs.append(substring)
+
+    return (literal_substrs, re_substrs)
+
+  def Match(self, value: str | list[str] | list[list[str]]) -> bool:
+    """Returns if a value matches the filter."""
 
     # If we have a list of attributes, recurse down to find match.
     # This might be the case if matching the presence of a Flag.
-    if isinstance(attr_value, list):
-      for attr_elem in attr_value:
-        if self._Match(attr, attr_elem):
+    if isinstance(value, list):
+      for list_elem in value:
+        if self.Match(list_elem):
           return True
       return False
 
-    # Is there this attribute, is it set and does it match?
-    if (attr in self._literals_filter and self._literals_filter[attr] and
-        attr_value in self._literals_filter[attr]):
+    # Is there a literal for this value?
+    if (self._literals and value in self._literals):
       return True
-    
+
     # Regular expressions are held separately as compiled expressions.
-    if attr in self._compiled_filter:
-      for regexp in self._compiled_filter[attr]:
-        if regexp.match(attr_value):
+    if self._compiled:
+      for regexp in self._compiled:
+        if regexp.match(value):
           return True
-        
+
     return False
-
-  #############################################################################
-  # Methods related to sending commands and receiving responses from devices. #
-  #############################################################################
-
-  def _CreateCmdRequest(self, target, command, mode):
-    """Creates command request for Device Accessor."""
-
-    request = self.Request()
-    request.target = target
-    request.command = bytes(command, 'utf-8').decode('unicode_escape')
-    request.mode = mode
-    logging.debug("Built Cmd Request: '%s' for host: '%s'.", command, target)
-    return request
-
-  def _ReformatCmdResponse(self, response):
-    """Formats command response into name value pairs in a dictionary."""
-    raise NotImplementedError
-
-  def _SendRequests(self, requests_callbacks, deadline=None):
-    """Submit command requests to device manager."""
-    raise NotImplementedError
