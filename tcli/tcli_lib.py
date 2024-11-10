@@ -76,9 +76,9 @@ DISPLAY_FORMATS = ['raw', 'csv', 'tbl', 'nvp']
 MODE_FORMATS = ['cli', 'gated', 'http', 'shell']
 
 # TCLI (local) command prefix.
-ESCAPE = '/'
+SLASH = '/'
 # pylint: disable=redefined-builtin
-if __doc__: __doc__ = __doc__.replace('%s', ESCAPE)
+if __doc__: __doc__ = __doc__.replace('%s', SLASH)
 
 # Banner message to display at program start.
 BANNER_WIDTH = 76
@@ -86,15 +86,15 @@ MOTD = f"""#!{'#'*BANNER_WIDTH}!#'
 #! TCLI - Tokenized Command Line Interface
 #! Note: Beta code, use with caution.
 #!
-#! Type '{ESCAPE}help' to get started.
-#! To disable color: '{ESCAPE}color off'.
+#! Type '{SLASH}help' to get started.
+#! To disable color: '{SLASH}color off'.
 #!
 #! For more guidance see:
 #! https://github.com/harro/tcli
 #!
 #! Note:
 #! Interactive TCLI starts in safe mode (indicated by '*' in the prompt).
-#! To disable safe mode: '{ESCAPE}safemode off'.
+#! To disable safe mode: '{SLASH}safemode off'.
 #!
 #! Have a nice day!
 #!{'#'*BANNER_WIDTH}!#"""
@@ -630,7 +630,7 @@ class TCLI(object):
 
     # Silently discard leading whitespace on cli.
     full_line = readline.get_line_buffer().lstrip()
-    if full_line and full_line.startswith(ESCAPE):
+    if full_line and full_line.startswith(SLASH):
       return self._TildeCompleter(full_line, state)
     return self._CmdCompleter(full_line, state)
 
@@ -663,7 +663,7 @@ class TCLI(object):
 
     if state < len(completer_list):
       # Re-apply TILDE to completion.
-      return ESCAPE + completer_list[state]
+      return SLASH + completer_list[state]
     return None
 
   def _CmdCompleter(self, full_line, state):
@@ -759,7 +759,7 @@ class TCLI(object):
         continue
 
       # TCLI commands.
-      if command.startswith(ESCAPE):
+      if command.startswith(SLASH):
         _FlushCommands(command_list)
         # Remove tilde command prefix and submit to TCLI command interpreter.
         self.TildeCmd(command[1 :])
@@ -887,7 +887,7 @@ class TCLI(object):
         if command in ('recordstop', 'logstop') and args and args[0] == buf:
           continue
         # Prefix tilde back onto logs.
-        self.buffers.Append(buf, ESCAPE + line)
+        self.buffers.Append(buf, SLASH + line)
 
     # Command execution.
     try:
@@ -924,15 +924,15 @@ class TCLI(object):
     Returns:
       Tuple, the command line with inline TCLI commands removed and TCLI
       instance with the tilde commands applied (None if no tilde commands).
-    """.replace('%s', (ESCAPE * 2))
+    """.replace('%s', (SLASH * 2))
 
-    if '%s' % (ESCAPE * 2) not in command:
+    if '%s' % (SLASH * 2) not in command:
       return (command, None)
 
     # Create new child with inline escape command changes.
     inline_tcli = copy.copy(self)
 
-    token_list = command.split(' %s' % (ESCAPE * 2))
+    token_list = command.split(' %s' % (SLASH * 2))
     # If all tokens parse then the first token is the commandline.
     command_left = token_list[0]
     command_right = token_list[1 :]
@@ -947,12 +947,12 @@ class TCLI(object):
       except (ValueError, ParseError):
         # If a token doesn't parse then it and all tokens to the left are
         # returned to the commandline.
-        command_left = (' %s' % (ESCAPE * 2)).join(token_list[:index + 1])
+        command_left = (' %s' % (SLASH * 2)).join(token_list[:index + 1])
         break
       except EOFError:
         # Exit in this context stop further inline command parsing.
         # Inline commands to the left of the exit are treated as regular input.
-        command_left = (' %s' % (ESCAPE * 2)).join(token_list[:index])
+        command_left = (' %s' % (SLASH * 2)).join(token_list[:index])
         break
       index -= 1
 
