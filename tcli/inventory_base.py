@@ -243,7 +243,7 @@ class Inventory(object):
       if not self._devices:
         raise InventoryError(
             'Device inventory data failed to load or no devices found.')
-      return self._devices
+      return self._devices.copy()
 
   @property
   def device_list(self):
@@ -251,15 +251,18 @@ class Inventory(object):
     with self._getter_lock:
       # 'None' means the list needs to be built first.
       if self._device_list is None: return self._BuildDeviceList()
-      return self._device_list
+      return self._device_list.copy()
 
   @property
   def inclusions(self):
-    return self._inclusions
+    return self._inclusions.copy()
 
   @property
   def exclusions(self):
-    return self._exclusions
+    return self._exclusions.copy()
+  
+  # pylint: disable=protected-access
+  targets = property(lambda self: self._inclusions['targets'].copy())
 
   def Load(self) -> None:
     """Loads Devices inventory from external store."""
@@ -339,9 +342,6 @@ class Inventory(object):
   def ShowEnv(self):
     """Show command settings."""
     return self._ShowEnv()
-
-  # pylint: disable=protected-access
-  targets = property(lambda self: self._inclusions['targets'])
 
   # Command handlers have identical arguments.
   def _CmdFilterCompleter(self, word_list, state):
