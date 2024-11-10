@@ -80,14 +80,14 @@ class InventoryBaseTest(unittest.TestCase):
     """Test building dict of Device objects."""
 
     self.assertListEqual(
-      list(self.inv.GetDevices().keys()), 
+      list(self.inv.devices.keys()), 
       ['device01', 'device02', 'device03', 'device04'])
 
   def testGetDeviceList(self):
     """Tests returning a list of Device names."""
 
     # Default filter matches no devices.
-    self.assertListEqual(self.inv.GetDeviceList(), [])
+    self.assertListEqual(self.inv.device_list, [])
 
   def testReformatCmdResponse(self):
     # Tested in child module.

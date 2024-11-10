@@ -225,17 +225,10 @@ class Inventory(object):
       self._exclusions['x' + attr] = ''
 
   @property
-  def inclusions(self):
-    return self._inclusions
+  def devices(self) -> dict[str, typing.NamedTuple]:
+    """Returns Devices from external store.
 
-  @property
-  def exclusions(self):
-    return self._exclusions
-
-  def GetDevices(self):
-    """Loads Devices from external store.
-
-    Stores data in _devices in a format like:
+    Stores data in _devices in a dictionary of NamedTuples like:
     {'devicename1: Device(attribute1='value1',
                           attribute2='value2',
                           ... ),
@@ -244,14 +237,29 @@ class Inventory(object):
      ...
     }
     """
-
     with self._getter_lock:
-      return self._GetDevices()
+      # Wait for any pending device loading.
+      self._loaded.wait()
+      if not self._devices:
+        raise InventoryError(
+            'Device inventory data failed to load or no devices found.')
+      return self._devices
 
-  def GetDeviceList(self):
+  @property
+  def device_list(self):
     """Returns a filtered list of Devices."""
     with self._getter_lock:
-      return self._GetDeviceList()
+      # 'None' means the list needs to be built first.
+      if self._device_list is None: return self._BuildDeviceList()
+      return self._device_list
+
+  @property
+  def inclusions(self):
+    return self._inclusions
+
+  @property
+  def exclusions(self):
+    return self._exclusions
 
   def Load(self) -> None:
     """Loads Devices inventory from external store."""
@@ -332,10 +340,6 @@ class Inventory(object):
     """Show command settings."""
     return self._ShowEnv()
 
-  # Obtains devices when they have been loaded.
-  devices = property(GetDevices)
-  # Returns a sorted list targets.
-  device_list = property(GetDeviceList)
   # pylint: disable=protected-access
   targets = property(lambda self: self._inclusions['targets'])
 
@@ -515,7 +519,7 @@ class Inventory(object):
 
     if attribute == 'targets':
       # Warn user if literal is unknown.
-      validate_list = self._GetDevices()
+      validate_list = self.devices
     elif (attribute in DEVICE_ATTRIBUTES and
           DEVICE_ATTRIBUTES[attribute].valid_values):
       validate_list = DEVICE_ATTRIBUTES[attribute].valid_values
@@ -524,7 +528,7 @@ class Inventory(object):
       # device matches.
       # TODO(harro): For filter responsiveness reasons we may drop this.
       validate_list = [getattr(dev, attribute, None)
-                        for dev in self._GetDevices().values()]
+                        for dev in self.devices.values()]
       validate_list = set(self._Flatten(validate_list))
 
     validate_list = [value.lower() for value in validate_list]
@@ -561,23 +565,6 @@ class Inventory(object):
         )
 
     return '\n'.join(display_string) + '\n'
-
-  def _GetDevices(self) -> dict[str, typing.NamedTuple]:
-    """Returns a dict of Device objects. Blocks until devices have loaded."""
-
-    # Wait for any pending device loading.
-    self._loaded.wait()
-    if not self._devices:
-      raise InventoryError(
-          'Device inventory data failed to load or no devices found.')
-    return self._devices
-
-  def _GetDeviceList(self) -> list[str]:
-    """Returns a list of Device names."""
-
-    # 'None' means the list needs to be built first.
-    if self._device_list is None: return self._BuildDeviceList()
-    return self._device_list
 
   #TODO(harro): If we flip the exclude/include logic, is this cleaner?
   def _FilterMatch(self, devicename: str, device_attrs: typing.NamedTuple,
@@ -637,7 +624,7 @@ class Inventory(object):
       return self._device_list
 
     d_list = []
-    for (devicename, d) in self._GetDevices().items():
+    for (devicename, d) in self.devices.items():
       # Skip devices that match any non-blank exclusions.
       if self._FilterMatch(devicename, d, exclude=True):
         continue
