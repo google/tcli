@@ -340,8 +340,25 @@ class Inventory(object):
     return self._SendRequests(requests_callbacks, deadline=deadline)
 
   def ShowEnv(self):
-    """Show command settings."""
-    return self._ShowEnv()
+    """Show inventory attribute filter settings."""
+
+    indent = ' '*2
+    # Add headline to indicate this display section is from this module.
+    display_string = ['Inventory:']
+    display_string.append(f'{indent}Max Targets: {self._maxtargets}')
+    # Sub section for Filters and Exclusions.
+    display_string.append(f'{indent}Filters:')
+    # Assumes that for every inclusion there is a corresponding exclusion.
+    for incl, excl in zip(sorted(self._inclusions), sorted(self._exclusions)):
+      # Create paired entries like 'Targets: ..., XTargets: ...'
+      display_string.append(
+        f'{indent*2}' +
+        self._FormatLabelAndValue(incl, self._inclusions[incl]) +
+        ', ' +
+        self._FormatLabelAndValue(excl, self._exclusions[excl], caps=2)
+        )
+
+    return '\n'.join(display_string) + '\n'
 
   # Command handlers have identical arguments.
   def _CmdFilterCompleter(self, word_list, state):
@@ -544,27 +561,6 @@ class Inventory(object):
     # Capitalise the prefix.
     label = label[:caps].upper() + label[caps :]
     return f'{label}: {value}'
-
-  def _ShowEnv(self):
-    """Extends show environment to display filters and exclusions."""
-
-    indent = ' '*2
-    # Add headline to indicate this display section is from this module.
-    display_string = ['Inventory:']
-    display_string.append(f'{indent}Max Targets: {self._maxtargets}')
-    # Sub section for Filters and Exclusions.
-    display_string.append(f'{indent}Filters:')
-    # Assumes that for every inclusion there is a corresponding exclusion.
-    for incl, excl in zip(sorted(self._inclusions), sorted(self._exclusions)):
-      # Create paired entries like 'Targets: ..., XTargets: ...'
-      display_string.append(
-        f'{indent*2}' +
-        self._FormatLabelAndValue(incl, self._inclusions[incl]) +
-        ', ' +
-        self._FormatLabelAndValue(excl, self._exclusions[excl], caps=2)
-        )
-
-    return '\n'.join(display_string) + '\n'
 
   #TODO(harro): If we flip the exclude/include logic, is this cleaner?
   def _FilterMatch(self, devicename: str, device_attrs: typing.NamedTuple,

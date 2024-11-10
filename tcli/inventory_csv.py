@@ -104,13 +104,6 @@ class Inventory(inventory_base.Inventory):
 
   SOURCE = 'csv'
 
-  def _ShowEnv(self):
-    """Extends show environment to display CSV specific values in TCLI."""
-
-    # The extra attribute filters get picked up automatically.
-    # So we call the parent unchanged.
-    return super(Inventory, self)._ShowEnv()
-
   def _ParseDevicesFromCsv(self, buf, separator=','):
     """Parses buffer into tabular format.
 
