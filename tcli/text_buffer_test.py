@@ -54,7 +54,7 @@ class TextBufferTest(unittest.TestCase):
   def testGetBuffer(self):
     self.buf._buffers['boo'] = 'hello\nworld'
     self.assertEqual('hello\nworld', self.buf.GetBuffer('boo'))
-    self.assertEqual(None, self.buf.GetBuffer('non_exist'))
+    self.assertRaises(AttributeError, self.buf.GetBuffer,'non_exist')
 
   def testListBuffer(self):
     self.buf._buffers['boo'] = 'hello\nworld'

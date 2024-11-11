@@ -44,8 +44,7 @@ class UnitTestTCLIEndToEnd(unittest.TestCase):
     tcli.FLAGS([__file__,])
     # Stub out as little as possible.
     tcli.command_response.tqdm = mock.MagicMock()
-    tcli.TCLI._PrintWarning = mock.Mock()
-    tcli.TCLI._PrintSystem = mock.Mock()
+    tcli.TCLI._Print = mock.Mock()
 
   @classmethod
   def tearDownClass(cls):
@@ -67,7 +66,7 @@ class UnitTestTCLIEndToEnd(unittest.TestCase):
   def testSendReceiveCommand(self):
 
     # Mock the class method as an inline object is created dynamically.
-    with mock.patch.object(tcli.TCLI, '_PrintOutput') as mock_tcli_out:
+    with mock.patch.object(tcli.TCLI, '_Print') as mock_tcli_out:
       gcl_obj = tcli.TCLI()
       gcl_obj.StartUp(None, False)
 
@@ -84,9 +83,9 @@ class UnitTestTCLIEndToEnd(unittest.TestCase):
       gcl_obj.ParseCommands('cat a //D csv\ncat b //D csv')
 
       mock_tcli_out.assert_has_calls([
-          mock.call(HEADER % 'a', title=True),
+          mock.call(HEADER % 'a', msgtype='title'),
           mock.call(OUTPUT_A),
-          mock.call(HEADER % 'b', title=True),
+          mock.call(HEADER % 'b', msgtype='title'),
           mock.call(OUTPUT_B)])
 
     self.assertEqual('raw', gcl_obj.display)
@@ -96,14 +95,14 @@ class UnitTestTCLIEndToEnd(unittest.TestCase):
     tcli.FLAGS.targets = 'device_a,device_b'
     tcli.FLAGS.xtargets = ''
     # Mock the class as commands are executed before the object is returned.
-    with mock.patch.object(tcli.TCLI, '_PrintOutput') as mock_tcli_out:
+    with mock.patch.object(tcli.TCLI, '_Print') as mock_tcli_out:
       gcl_obj = tcli.TCLI()
       gcl_obj.StartUp('cat a\ncat b', False)
 
       mock_tcli_out.assert_has_calls([
-          mock.call(HEADER % 'a', title=True),
+          mock.call(HEADER % 'a', msgtype='title'),
           mock.call(OUTPUT_A),
-          mock.call(HEADER % 'b', title=True),
+          mock.call(HEADER % 'b', msgtype='title'),
           mock.call(OUTPUT_B)])
 
     # RC script ignored.

@@ -94,6 +94,7 @@ flags.DEFINE_string(
 flags.DEFINE_string('separator', ', ',
                     'String sequence that separates entries in the CSV file.')
 
+CmdResponse = inventory_base.CmdResponse
 
 class Inventory(inventory_base.Inventory):
   """CSV Inventory Class.

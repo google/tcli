@@ -246,7 +246,7 @@ class Inventory(object):
       return self._devices.copy()
 
   @property
-  def device_list(self):
+  def device_list(self) -> list[str]:
     """Returns a filtered list of Devices."""
     with self._getter_lock:
       # 'None' means the list needs to be built first.
@@ -254,11 +254,11 @@ class Inventory(object):
       return self._device_list.copy()
 
   @property
-  def inclusions(self):
+  def inclusions(self) -> dict[str, str]:
     return self._inclusions.copy()
 
   @property
-  def exclusions(self):
+  def exclusions(self) -> dict[str, str]:
     return self._exclusions.copy()
   
   # pylint: disable=protected-access
@@ -278,7 +278,7 @@ class Inventory(object):
                                             daemon=True)
     self._devices_thread.start()
 
-  def RegisterCommands(self, cmd_register):
+  def RegisterCommands(self, cmd_register) -> None:
     """Add module specific command support to TCLI."""
 
     # Register commands common to any inventory source.
@@ -319,7 +319,7 @@ class Inventory(object):
                                    append=True, inline=True, regexp=True,
                                    handler=self._CmdFilter)
 
-  def SendRequests(self, requests_callbacks, deadline=None):
+  def SendRequests(self, requests_callbacks, deadline:int|None=None):
     """Submits command requests to device manager.
 
     Submit the command requests to the device manager for resolution.
@@ -339,7 +339,7 @@ class Inventory(object):
     """
     return self._SendRequests(requests_callbacks, deadline=deadline)
 
-  def ShowEnv(self):
+  def ShowEnv(self) -> str:
     """Show inventory attribute filter settings."""
 
     indent = ' '*2
@@ -361,7 +361,8 @@ class Inventory(object):
     return '\n'.join(display_string) + '\n'
 
   # Command handlers have identical arguments.
-  def _CmdFilterCompleter(self, word_list, state):
+  def _CmdFilterCompleter(
+    self, word_list:list[str], state:int) -> list[str]|None:
     """Returns a command completion list for valid attribute completions."""
 
     # Only complete on a single word, the attribute name.
@@ -475,7 +476,8 @@ class Inventory(object):
     self._BuildDeviceList()
     return ''
 
-  def _CmdMaxTargets(self, command_name: str, args: list[str], append=False) -> str:
+  def _CmdMaxTargets(
+    self, command_name: str, args: list[str], append=False) -> str:
     """Updates or displays maxtargets filter.
 
     Args:
@@ -489,7 +491,7 @@ class Inventory(object):
         than the current device list.
     """
     if not args:
-      return self._FormatLabelAndValue(command_name, self._maxtargets)
+      return self._FormatLabelAndValue(command_name, str(self._maxtargets))
 
     try:
       maxtargets = int(args[0])
@@ -501,7 +503,7 @@ class Inventory(object):
     self._maxtargets = maxtargets
     return ''
 
-  def _Flatten(self, container: list|tuple):
+  def _Flatten(self, container:list|tuple) -> typing.Iterator[str]:
     """Flattens arbitrarily deeply nested lists."""
 
     for i in container:
@@ -511,7 +513,7 @@ class Inventory(object):
       else:
         yield i
 
-  def ValidFilter(self, filter_name, literals):
+  def ValidFilter(self, filter_name:str, literals:list[str]) -> bool:
     """Update inventory filter.
 
     Sets the new value for the filter string. Only called against valid
@@ -554,7 +556,7 @@ class Inventory(object):
     unmatched_literals = set(literals).difference(set(validate_list))
     return False if unmatched_literals else True
 
-  def _FormatLabelAndValue(self, label, value, caps=1):
+  def _FormatLabelAndValue(self, label:str, value:str, caps:int=1) -> str:
     """Returns string with titlecase label and corresponding value."""
 
     caps = min(caps, len(label))
@@ -563,8 +565,8 @@ class Inventory(object):
     return f'{label}: {value}'
 
   #TODO(harro): If we flip the exclude/include logic, is this cleaner?
-  def _FilterMatch(self, devicename: str, device_attrs: typing.NamedTuple,
-                   exclude=False) -> bool:
+  def _FilterMatch(self, devicename:str, device_attrs:typing.NamedTuple,
+                   exclude:bool=False) -> bool:
     """Returns true if device matches the inclusion/exclusion filter."""
 
     filter = self._exclusions if exclude else self._inclusions

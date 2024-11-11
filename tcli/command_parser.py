@@ -125,7 +125,7 @@ class CommandParser(dict):
     """
 
     if command_name not in self:
-      raise ValueError
+      raise ValueError(f"Called unknown command: '{command_name}'.")
 
     if not hasattr(self[command_name], 'default_value'):
       return

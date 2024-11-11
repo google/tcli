@@ -15,7 +15,6 @@
 """Executable for TCLI."""
 
 import logging
-import readline
 import sys
 from absl import app
 from absl import flags
@@ -41,10 +40,10 @@ def main(_):
     sys.exit(0)
 
   # Interactive prompt, setup Tab completion
-  readline.set_completer(tcli_singleton.Completer)
-  readline.parse_and_bind('tab: complete')
-  readline.parse_and_bind('?: complete')
-  readline.set_completer_delims(' ')
+  tcli.readline.set_completer(tcli_singleton.Completer)
+  tcli.readline.parse_and_bind('tab: complete')
+  tcli.readline.parse_and_bind('?: complete')
+  tcli.readline.set_completer_delims(' ')
   tcli_singleton.Motd()
 
   while True:
