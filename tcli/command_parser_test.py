@@ -16,6 +16,7 @@
 
 import unittest
 from tcli import command_parser
+from tcli.command_parser import SLASH, INLINE 
 
 
 class CommandParserTest(unittest.TestCase):
@@ -181,7 +182,82 @@ class CommandParserTest(unittest.TestCase):
                  'inline', 'raw_arg', 'regexp', 'toggle'):
       self.assertEqual(boo_dict[attr], getattr(boo, attr))
       self.assertEqual(hoo_dict[attr], getattr(hoo, attr))
+    
+  def testExtractInlineCmds(self) -> None:
+    """Tests extracting inline commands from right of commandline."""
 
+    def _testSplit(pre_cmd: str, pre_inline: str) -> None:
+      (post_cmd, post_inline) = self.cmd_parser.ExtractInlineCommands(
+        pre_cmd + pre_inline)
+      self.assertEqual(pre_cmd, post_cmd)
+      post_inline.insert(0, '')
+      self.assertEqual(pre_inline, f' {INLINE}'.join(post_inline))
+
+    self.cmd_parser.RegisterCommand(
+      'log', inline=True, handler=lambda x:x, help_str='')
+    self.cmd_parser.RegisterCommand(
+      'display', short_name='D', inline=True, handler=lambda x:x, help_str='')
+    self.cmd_parser.RegisterCommand(
+      'exit', inline=True, handler=lambda x:x, help_str='')
+
+    # Command with simple inline in short form.
+    cmd = 'cat alpha'
+    inline = f' {INLINE}D csv'
+    _testSplit(cmd, inline)
+
+    # Reasonably complex command with piping but no inlines.
+    cmd = 'cat alpha | grep abc || grep xyz'
+    inline = ''
+    # Command without inlines returns original command line.
+    _testSplit(cmd, inline)
+
+    # Command with invalid inlines are included as command line.
+    _testSplit(cmd + f' {INLINE}bogus', inline)
+
+    # The inline must be preceded by a space.
+    _testSplit(cmd + f'{INLINE}log logfile', inline)
+    _testSplit(cmd, f' {INLINE}log logfile')
+
+    # Multiple inline commands are supported.
+    inline = f' {INLINE}' + f' {INLINE}'.join(('display csv', 'log logfile'))
+    _testSplit(cmd, inline)
+
+    # 'exit' inline command will stop further processing of inline commands.
+    cmd += f' {INLINE}' + 'display csv'
+    inline = f' {INLINE}' + f' {INLINE}'.join(('exit', 'log logfile'))
+    (post_cmd, post_inline) = self.cmd_parser.ExtractInlineCommands(
+        cmd + inline)
+    self.assertEqual(cmd, post_cmd)
+    self.assertEqual(post_inline, ['log logfile'])
+
+    # Invalid inline commands, and commands to the left of it, are assumed to
+    # be part of the regular command.
+    cmd = 'cat alpha{INLINE}log {INLINE}bogus'
+    inline =  f' {INLINE}log filelist'
+    _testSplit(cmd, inline)
+
+  def testExtractPipe(self) -> None:
+      """Tests parsing of command pipes."""
+
+      cmd = 'cat alpha | grep abc || grep xyz || grep -v "||"'
+      self.assertEqual(
+          ('cat alpha | grep abc', '| grep xyz | grep -v "||"'),
+          self.cmd_parser.ExtractPipe(cmd))
+
+      cmd = "cat alpha '||' || grep xyz || grep -v .   "
+      self.assertEqual(
+          ("cat alpha '||'", '| grep xyz | grep -v .'),
+          self.cmd_parser.ExtractPipe(cmd))
+
+      cmd = 'cat alpha   || grep xyz || grep -v "||"'
+      self.assertEqual(
+          ('cat alpha', '| grep xyz | grep -v "||"'),
+          self.cmd_parser.ExtractPipe(cmd))
+
+      cmd = "cat alpha | grep '||'"
+      self.assertEqual(
+          ("cat alpha | grep '||'", ''),
+          self.cmd_parser.ExtractPipe(cmd))
 
 if __name__ == '__main__':
   unittest.main()

@@ -31,40 +31,39 @@ import threading
 import typing
 from absl import flags
 from absl import logging
+from tcli.command_parser import APPEND
 
 # Global vars so flags.FLAGS has inventroy intelligence in the main program.
 
 TILDE_COMMAND_HELP = {
-    'attributes': """
-    Filter targets based on an attribute of the device.
-    First argument is attribute name, the second is the value.
-    If a attribute value is prefixed with a '^' then it is
-    treated as a regexp and implicitly ends with '.*$'.
+    'attributes': f"""
+    Filter targets based on an attribute of the device. First argument is
+    attribute name, the second is the value. If a attribute value is prefixed
+    with a '^' then it is treated as a regexp and implicitly ends with '.*$'.
     If command is appended with {APPEND} then adds to current attribute value.
     A value of '^' resets the attribute filter to 'none'.
     Shortname: 'A'.""",
 
-    'targets': """
-    Set target devices to receive commands
-    (hostnames or IP addresses, comma separated, no spaces).
-    If a target is prefixed with a '^' then it is
-    treated as a regexp and implicitly ends with '.*$'.
-    Regexp target list is expanded against devices.
-    If command is appended with {APPEND} then adds to current targets value."
+    'targets': f"""
+    Set target devices to receive commands (hostnames or IP addresses,
+    comma separated, no spaces). If a target is prefixed with a '^' then it is
+    treated as a regexp and implicitly ends with '.*$'. Regexp target list is
+    expanded against devices. If command is appended with {APPEND} then adds to
+    current targets value."
     A target of '^' resets the list to 'none'.
     Shortname: 'T'.""",
 
-    'maxtargets': """
+    'maxtargets': f"""
     High water mark to prevent accidentally making changes to large numbers of
     targets. A value of 0, removes the restriction.""",
 
-    'xattributes': """
+    'xattributes': f"""
     Omit targets that have the attribute of the same name as the first
     argument that matches a string or regexp from second argument.
     If command is appended with {APPEND} then adds to current xattributes value.
     Shortname: 'E'.""",
 
-    'xtargets': """
+    'xtargets': f"""
     Omit targets that match a string or regexp from this list.
     If command is appended with {APPEND} then adds to current xtargets value.
     Shortname: 'X'.""",
@@ -262,7 +261,7 @@ class Inventory(object):
     return self._exclusions.copy()
   
   # pylint: disable=protected-access
-  targets = property(lambda self: self._inclusions['targets'].copy())
+  targets = property(lambda self: self._inclusions['targets'])
 
   def Load(self) -> None:
     """Loads Devices inventory from external store."""
@@ -646,7 +645,7 @@ class Inventory(object):
 
     try:
       self._FetchDevices()
-      logging.info('Fetching of devices completed.')
+      logging.debug('Fetching of devices completed.')
     finally:
       self._load_lock.release()
       # Let pending getters know the data is ready.

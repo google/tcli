@@ -18,8 +18,13 @@
 import re
 import shlex
 
+# Command start with a slash, inline commands a double slash
+SLASH = '/'
+INLINE = SLASH*2
 # Command suffix for denoting appending values.
 APPEND = '+'
+# Indent for help strings.
+I = '\n' + ' '*4
 
 
 class Error(Exception):
@@ -283,3 +288,125 @@ class CommandParser(dict):
     """
     if command_name in self:
       del self[command_name]
+
+  # Create new child with inline escape command changes.
+  def ExtractInlineCommands(self, command:str) -> tuple[str,list[str]]:
+    # pylint: disable=missing-docstring
+    f"""Separate out inline commmand overrides from command input.
+
+    Converts something like:
+      'cat alpha | grep abc || grep xyz {INLINE}display csv {INLINE}log bufname'
+    Into:
+      command = ['cat alpha | grep ablc || grep xyz']
+      display = 'csv'
+      log = 'buffername'
+
+    A sequence with '{INLINE}' that is not preceded by a space and part of a
+    valid command is treated as part of the command body and no further matches
+    are made. This determination is done from right to left.
+
+    e.g.
+      'show flash:{INLINE}file_name {INLINE}bogus {INLINE}log filelist'
+    Converts into:
+      ('show flash:{INLINE}file_name {INLINE}bogus', ('log filelist',))
+
+    Args:
+      command: str, command issued to target devices.
+
+    Returns:
+      List, the command line (minus inline commands) and a tupe of inline the
+      TCLI commands extracted.
+    """
+
+    token_list = command.split(f' {INLINE}')
+    # Do we need to extract inline commands at all?
+    if len(token_list) == 1: return (command, [])
+
+    (command_str, token_list) = (token_list[0], token_list[1:])
+    inline_commands = []
+    command_suffix = ''
+    index = 0
+    # Work from right to left.
+    for i in range(len(token_list), 0, -1):
+      index = i
+      token = token_list[i -1]
+      try:
+        # 'exit' in this context stops any further inline command parsing.
+        if token == 'exit':
+          # Any inline commands to the left are treated as regular input.
+          # Drop 'exit' from the inline commands, it has no other purpose here.
+          token_list.pop(index -1)
+          break
+        # Confirm that token parses cleanly.
+        self.ParseCommandLine(token)
+        inline_commands.insert(0, token)
+      except (ValueError, ParseError):
+        # If a token doesn't parse then it and all tokens to the left are
+        # returned back to the commandline.
+        index += 1    # Including the current one.
+        break
+
+    if index > 1:     # True if we broke early from the above for loop.
+      # Add back any remaining unparsed tokens to the command string.
+      command_suffix = f' {INLINE}' + f' {INLINE}'.join(token_list[:index-1])
+
+    return (command_str + command_suffix, inline_commands)
+
+  def ExtractPipe(self, command:str) -> tuple[str,str]:
+    """Separate out local pipe suffix from command input.
+
+    Converts something like:
+      'cat alpha | grep abc || grep xyz || grep -v "||"'
+    Into:
+      ('cat alpha | grep abc', 'grep xyz | grep -v "||"')
+
+    Args:
+      command: str, command string to split.
+
+    Returns:
+      Tuple with the first argument being the text to pass on to the device
+      and the second value is the local pipe with '||' replaced with '|'.
+    """
+
+    # Trivial case, there is no pipes.
+    if '||' not in command:
+      return (command, '')
+
+    found_single_pipe = False
+    dbl_pipe_str = ''
+    cmd_str = ''
+    # Split out quoted and non-quoted text and work through from the right.
+    #TODO(harro): Could be more legible. And does this handle nested quotes?
+    for cmd_elem in reversed(
+        re.findall("""([^"']+)|("[^"]*")|('[^']*')""", command)):
+      (nonquoted, _, _) = cmd_elem
+      if nonquoted and not found_single_pipe:
+        # At this point we have non-quoted text that may have '|' or '||' in it.
+        # Convert something like:
+        #   '0 || 1 | 2 || 3 |||'
+        # Into:
+        #   ('0 || 1 | 2', '| 3 |||')
+
+        tmp_str = ''
+        # Split out pipe commands and work through from right.
+        for pipe_elem in reversed(re.findall(r'([^|]+)|(\|+)', nonquoted)):
+          (pipe_text, pipe_cmd) = pipe_elem
+          if not pipe_cmd:
+            tmp_str = pipe_text + tmp_str
+            continue
+
+          if pipe_cmd == '||' and not found_single_pipe:
+            dbl_pipe_str = '|' + tmp_str + cmd_str + dbl_pipe_str
+            cmd_str = ''
+            tmp_str = ''
+          else:
+            if pipe_cmd == '|':
+              # No more double pipe elements.
+              found_single_pipe = True
+            tmp_str = pipe_cmd + tmp_str
+
+        cmd_str = tmp_str + cmd_str
+      else:
+        cmd_str = ''.join(cmd_elem) + cmd_str
+
+    return (cmd_str.rstrip(), dbl_pipe_str.strip())

@@ -199,15 +199,15 @@ def RegisterCommands(
   cli_parser.RegisterCommand(
     'record',
     f'{indent}Record commands to named <buffer>.'
-    f'{indent}If command is appended with'
-    f' {command_parser.APPEND} then append to buffer.',
+    f'{indent}If command is appended with {command_parser.APPEND} then'
+    ' append to buffer.',
     append=True, inline=True, handler=command_object._CmdLogging)
   
   cli_parser.RegisterCommand(
     'recordall',
     f'{indent}Record commands and escape commands to named <buffer>.'
-    f'{indent}If command is appended with'
-    f' {command_parser.APPEND} then append to buffer.',
+    f'{indent}If command is appended with {command_parser.APPEND} then'
+    ' append to buffer.',
     append=True, inline=True, handler=command_object._CmdLogging)
   
   cli_parser.RegisterCommand(
