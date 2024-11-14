@@ -18,8 +18,10 @@
 """
 
 import threading
-from absl import logging
 import tqdm
+from absl import logging
+from tcli import inventory_base as inventory
+from typing import Callable
 
 PROGRESS_MESSAGE = '#! Receiving:'
 
@@ -53,15 +55,15 @@ class CmdResponse(object):
   # Class will only few (one) instance, so class-wide locking is acceptable.
   _lock = threading.Lock()    # Lock access to data to support async calls.
 
-  def Synchronized(func):  # pylint: disable=no-self-argument
+  def Synchronized(func):    # type: ignore
     """Synchronization decorator."""
 
     def Wrapper(main_obj, *args, **kwargs):
       with main_obj._lock:          # pylint: disable=protected-access
-        return func(main_obj, *args, **kwargs)  # pylint: disable=not-callable
+        return func(main_obj, *args, **kwargs)  # type: ignore
     return Wrapper
 
-  @Synchronized
+  @Synchronized # type: ignore
   def __init__(self):
     """Init starting values."""
 
@@ -76,8 +78,8 @@ class CmdResponse(object):
     # Graphic to indicate progress receiving responses.
     self._progressbar = None
 
-  @Synchronized
-  def SetCommandRow(self, command_row, pipe):
+  @Synchronized # type: ignore
+  def SetCommandRow(self, command_row:int, pipe:str) -> None:
     """Initialise data for a new row, each row corresponds to a command.
 
     Args:
@@ -90,8 +92,8 @@ class CmdResponse(object):
     self._row_response[command_row] = []
     self._pipe[command_row] = pipe
 
-  @Synchronized
-  def SetRequest(self, command_row, request_uid):
+  @Synchronized # type: ignore
+  def SetRequest(self, command_row:int, request_uid:int) -> None:
     """Maps uid returned by inventory class to a row number and result.
 
     Args:
@@ -103,8 +105,8 @@ class CmdResponse(object):
     self._uid_index[request_uid] = command_row
     self._row_index[command_row].append(request_uid)
 
-  @Synchronized
-  def AddResponse(self, response):
+  @Synchronized # type: ignore
+  def AddResponse(self, response:inventory.CmdResponse) -> bool:
     """Add response to results table.
 
     Args:
@@ -136,8 +138,8 @@ class CmdResponse(object):
       self._progressbar.update()
     return True
 
-  @Synchronized
-  def GetRow(self):
+  @Synchronized # type: ignore
+  def GetRow(self) -> tuple[list[int], str]|None:
     """Return current row if fully populated with results.
 
     Returns:
@@ -174,7 +176,7 @@ class CmdResponse(object):
       return result
     logging.debug('Current row incomplete.')
 
-  def GetResponse(self, uid):
+  def GetResponse(self, uid:int) -> inventory.CmdResponse|None:
     """Returns response object for a given uid."""
 
     try:
@@ -183,7 +185,7 @@ class CmdResponse(object):
       logging.error('Invalid UID: %s, possible values: %s.',
                     uid, str(self._results))
 
-  def StartIndicator(self, message=PROGRESS_MESSAGE):
+  def StartIndicator(self, message:str=PROGRESS_MESSAGE) -> None:
     """Starts a progress indicator to indicate receiving of requests."""
 
     # TODO(harro): Display textmessage at outset, or remove.

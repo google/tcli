@@ -31,48 +31,14 @@ import threading
 import typing
 from absl import flags
 from absl import logging
-from tcli.command_parser import APPEND
+from tcli.command_parser import APPEND, CommandParser
 
 # Global vars so flags.FLAGS has inventroy intelligence in the main program.
-
-TILDE_COMMAND_HELP = {
-    'attributes': f"""
-    Filter targets based on an attribute of the device. First argument is
-    attribute name, the second is the value. If a attribute value is prefixed
-    with a '^' then it is treated as a regexp and implicitly ends with '.*$'.
-    If command is appended with {APPEND} then adds to current attribute value.
-    A value of '^' resets the attribute filter to 'none'.
-    Shortname: 'A'.""",
-
-    'targets': f"""
-    Set target devices to receive commands (hostnames or IP addresses,
-    comma separated, no spaces). If a target is prefixed with a '^' then it is
-    treated as a regexp and implicitly ends with '.*$'. Regexp target list is
-    expanded against devices. If command is appended with {APPEND} then adds to
-    current targets value."
-    A target of '^' resets the list to 'none'.
-    Shortname: 'T'.""",
-
-    'maxtargets': f"""
-    High water mark to prevent accidentally making changes to large numbers of
-    targets. A value of 0, removes the restriction.""",
-
-    'xattributes': f"""
-    Omit targets that have the attribute of the same name as the first
-    argument that matches a string or regexp from second argument.
-    If command is appended with {APPEND} then adds to current xattributes value.
-    Shortname: 'E'.""",
-
-    'xtargets': f"""
-    Omit targets that match a string or regexp from this list.
-    If command is appended with {APPEND} then adds to current xtargets value.
-    Shortname: 'X'.""",
-}
 
 # Maximum number of devices that can be the recipient of a command.
 # Can (and should) be overriden in the child module or the command line.
 DEFAULT_MAXTARGETS = 50
-# System default for what device targets to exclude form matching.
+# System default for what device targets to exclude from matching.
 # Set this to avoid overly matching on devices that may rarely be an
 # intentional target of commands (but you still want to be able to send
 # commands to them as the exception rather than the rule).
@@ -90,18 +56,25 @@ CmdResponse = collections.namedtuple(
 FLAGS = flags.FLAGS
 
 flags.DEFINE_integer(
-    'maxtargets', DEFAULT_MAXTARGETS,
-    TILDE_COMMAND_HELP['maxtargets'])
+    'maxtargets', DEFAULT_MAXTARGETS, """
+    High water mark to prevent accidentally making changes to large numbers of
+    targets. A value of 0, removes the restriction.""")
 
 flags.DEFINE_string(
-    'targets', '',
-    TILDE_COMMAND_HELP['targets'],
-    short_name='T')
+    'targets', '', f"""
+    Set target devices to receive commands (hostnames or IP addresses,
+    comma separated, no spaces). If a target is prefixed with a '^' then it is
+    treated as a regexp and implicitly ends with '.*$'. Regexp target list is
+    expanded against devices. If command is appended with {APPEND} then adds to
+    current targets value."
+    A target of '^' resets the list to 'none'.
+    Shortname: 'T'.""", short_name='T')
 
 flags.DEFINE_string(
-    'xtargets', DEFAULT_XTARGETS,
-    TILDE_COMMAND_HELP['xtargets'],
-    short_name='X')
+    'xtargets', DEFAULT_XTARGETS, f"""
+    Omit targets that match a string or regexp from this list.
+    If command is appended with {APPEND} then adds to current xtargets value.
+    Shortname: 'X'.""", short_name='X')
 
 
 class Error(Exception):
@@ -125,23 +98,50 @@ class Attribute(object):
   #TODO(harro): Use getters / setters here an hide internals.
   def __init__(
       self, name: str, default_value: str, valid_values: list[str] | None,
-      help_str: str, display_case: Case='lower', command_flag: bool=False):
+      help_str: str, display_case: Case='lower'):
     self._default = default_value
     self.help_str = help_str
     self.name = name
     self.valid_values = valid_values
     self.display_case = display_case
-    self.command_flag = command_flag
-    if self.command_flag:
-      flags.DEFINE_string(self.name, default_value, help_str)
 
-  def _GetDefault(self):
-    if self.command_flag and hasattr(flags, self.name):
-      return getattr(flags, self.name)
-    else:
-      return self._default
+  @property
+  def default_value(self) -> str:
+    return self._default
 
-  default_value = property(_GetDefault)
+
+class CmdRequest(object):
+  """Request object to be sent to the external device accessor service.
+
+  The command request object created should satisfy the format required
+  by the device manager that retrieves the command results.
+
+  Each request object must be assigned a unique 'uid' attribute - unique
+  within the context of all pending requests, and all requests that have not
+  yet been rendered to the user. The device manager may generate this ID,
+  otherwise we add it here. We have no way of determining if a result has
+  been displayed (and the uid freed) so a monotomically increasing 32bit
+  number would suffice.
+
+  Some devices support multiple commandline modes or CLI interpretors
+  e.g. router CLI and sub-system unix cli.
+
+  Args:
+    target: device to send command to.
+    command: string single commandline to send to each device.
+    mode: commandline mode on device to submit the command to.
+  Returns:
+    List of request objects.
+  """
+
+  UID = 0    # Each request has an identifier
+
+  def __init__(self, target:str, command:str, mode:str='cli') -> None:
+    CmdRequest.UID += 1
+    self.uid = CmdRequest.UID
+    self.target = target
+    self.command = bytes(command, 'utf-8').decode('unicode_escape')
+    self.mode = mode
 
 
 class Inventory(object):
@@ -156,39 +156,6 @@ class Inventory(object):
     source: String identifier of source of device inventory.
   """
   SOURCE = 'unknown'
-
-  class CmdRequest(object):
-    """Request object to be sent to the external device accessor service.
-
-    The command request object created should satisfy the format required
-    by the device manager that retrieves the command results.
-
-    Each request object must be assigned a unique 'uid' attribute - unique
-    within the context of all pending requests, and all requests that have not
-    yet been rendered to the user. The device manager may generate this ID,
-    otherwise we add it here. We have no way of determining if a result has
-    been displayed (and the uid freed) so a monotomically increasing 32bit
-    number would suffice.
-
-    Some devices support multiple commandline modes or CLI interpretors
-    e.g. router CLI and sub-system unix cli.
-
-    Args:
-      target: device to send command to.
-      command: string single commandline to send to each device.
-      mode: commandline mode on device to submit the command to.
-    Returns:
-      List of request objects.
-    """
-
-    UID = 0    # Each request has an identifier
-
-    def __init__(self, target: str, command: str, mode: str='cli') -> None:
-      Inventory.CmdRequest.UID += 1
-      self.uid = Inventory.CmdRequest.UID
-      self.target = target
-      self.command = bytes(command, 'utf-8').decode('unicode_escape')
-      self.mode = mode
 
   def __init__(self):
     """Initialise thread safe access to data to support async calls."""
@@ -277,38 +244,44 @@ class Inventory(object):
                                             daemon=True)
     self._devices_thread.start()
 
-  def RegisterCommands(self, cmd_register) -> None:
+  def RegisterCommands(self, cmd_register:CommandParser) -> None:
     """Add module specific command support to TCLI."""
 
     # Register commands common to any inventory source.
-    cmd_register.RegisterCommand('attributes', TILDE_COMMAND_HELP['attributes'],
-                                 max_args=2, append=True, regexp=True,
-                                 inline=True, short_name='A',
-                                 handler=self._AttributeFilter,
-                                 # TODO(harro): Change completer.
-                                 completer=self._CmdFilterCompleter)
-    cmd_register.RegisterCommand('targets', TILDE_COMMAND_HELP['targets'],
+    cmd_register.RegisterCommand('targets', FLAGS['targets'].help,
                                  append=True, regexp=True, inline=True,
                                  short_name='T', default_value=FLAGS.targets,
                                  handler=self._CmdFilter)
-    cmd_register.RegisterCommand('maxtargets', TILDE_COMMAND_HELP['maxtargets'],
-                                 default_value=FLAGS.maxtargets,
-                                 handler=self._CmdMaxTargets)
-    cmd_register.RegisterCommand('xattributes',
-                                 TILDE_COMMAND_HELP['xattributes'],
-                                 max_args=2, append=True, regexp=True,
-                                 inline=True, short_name='E',
-                                 handler=self._AttributeFilter,
-                                 # TODO(harro): Change completer.
-                                 completer=self._CmdFilterCompleter)
-    cmd_register.RegisterCommand('xtargets', TILDE_COMMAND_HELP['xtargets'],
+    cmd_register.RegisterCommand('xtargets', FLAGS['xtargets'].help,
                                  append=True, regexp=True, inline=True,
                                  short_name='X', default_value=FLAGS.xtargets,
                                  handler=self._CmdFilter)
+    cmd_register.RegisterCommand('maxtargets', FLAGS['maxtargets'].help,
+                                 default_value=FLAGS.maxtargets,
+                                 handler=self._CmdMaxTargets)
+    
+    cmd_register.RegisterCommand('attributes', f"""
+    Filter targets based on an attribute of the device. First argument is
+    attribute name, the second is the value. If a attribute value is prefixed
+    with a '^' then it is treated as a regexp and implicitly ends with '.*$'.
+    If command is appended with {APPEND} then adds to current attribute value.
+    A value of '^' resets the attribute filter to 'none'.
+    Shortname: 'A'.""", short_name='A',
+      max_args=2, append=True, regexp=True, inline=True, 
+      handler=self._AttributeFilter, completer=self._CmdFilterCompleter)
+
+    cmd_register.RegisterCommand(
+      'xattributes', f"""
+    Omit targets that have the attribute of the same name as the first
+    argument that matches a string or regexp from second argument.
+    If command is appended with {APPEND} then adds to current xattributes value.
+    Shortname: 'E'.""", short_name='E',
+      max_args=2, append=True, regexp=True, inline=True, 
+      handler=self._AttributeFilter, completer=self._CmdFilterCompleter)
 
     # Register commands specific to this inventory source.
     for attribute in DEVICE_ATTRIBUTES.values():
-      if attribute.command_flag and attribute.name in FLAGS:
+      if attribute.name in FLAGS:
         default_value = getattr(FLAGS, attribute.name)
       else:
         default_value = attribute.default_value
@@ -317,8 +290,23 @@ class Inventory(object):
                                    default_value=default_value,
                                    append=True, inline=True, regexp=True,
                                    handler=self._CmdFilter)
+      cmd_register.RegisterCommand('x' + attribute.name,
+                                   attribute.help_str, default_value='',
+                                   append=True, inline=True, regexp=True,
+                                   handler=self._CmdFilter)
 
-  def SendRequests(self, requests_callbacks, deadline:int|None=None):
+  def SetFiltersFromDefaults(self, cmd_register:CommandParser) -> None:
+    """Set/Reset filters to default values."""
+
+    for attr in self.inclusions:
+      cmd_register.ExecWithDefault(attr)
+  
+    for attribute in self.exclusions:
+      cmd_register.ExecWithDefault(attr)
+
+  def SendRequests(
+      self, requests_callbacks:list[tuple[CmdRequest, typing.Callable]],
+      deadline:float|None=None) -> None:
     """Submits command requests to device manager.
 
     Submit the command requests to the device manager for resolution.
@@ -336,7 +324,7 @@ class Inventory(object):
     Returns:
       None
     """
-    return self._SendRequests(requests_callbacks, deadline=deadline)
+    raise NotImplementedError
 
   def ShowEnv(self) -> str:
     """Show inventory attribute filter settings."""
@@ -386,7 +374,7 @@ class Inventory(object):
       return None
 
   def _AttributeFilter(
-      self, command_name: str, args: list[str], append:bool=False) -> str:
+      self, command_name:str, args:list[str], append:bool=False) -> str:
     """Updates or displays the inventory inclusions or exclusions (filters).
 
     Args:
@@ -422,7 +410,7 @@ class Inventory(object):
     return ''
   
   def _CmdFilter(
-      self, command_name: str, args: list[str], append:bool=False) -> str:
+      self, command_name:str, args:list[str], append:bool=False) -> str:
     """Updates or displays target device inventory filter.
 
     Args:
@@ -454,7 +442,6 @@ class Inventory(object):
 
     filter_string = args[0]   # TODO(harro): Raise exception is args >1 ?
     if filter_string in ('^', '^$'):
-      del(self._filters[command_name])
       filters[command_name] = ''
       # Clear device list to trigger re-application of filter.
       self._device_list = None
@@ -476,7 +463,7 @@ class Inventory(object):
     return ''
 
   def _CmdMaxTargets(
-    self, command_name: str, args: list[str], append=False) -> str:
+    self, command_name:str, args:list[str], append=False) -> str:
     """Updates or displays maxtargets filter.
 
     Args:
@@ -654,17 +641,10 @@ class Inventory(object):
   def _FetchDevices(self) -> None|NotImplementedError:
     """Fetches Devices from external store ."""
     raise NotImplementedError
-
-  def _SendRequests(
-      self, requests_callbacks:tuple, deadline:float|None=None
-      ) -> None|NotImplementedError:
-    """Submit command requests to device manager."""
-    raise NotImplementedError
-
 class FilterMatch(object):
   """Object for filter string decomposition and matching against values."""
 
-  def __init__(self, filter_string: str, ignorecase: bool=True) -> None:
+  def __init__(self, filter_string:str, ignorecase:bool=True) -> None:
     # Literal strings and compiled regexps keyed on attribute name.
     self._Set(filter_string, ignorecase)
 
@@ -672,7 +652,7 @@ class FilterMatch(object):
   def filters(self) -> tuple:
     return (self._literals, self._compiled)
 
-  def _Set(self, filter_string: str, ignore_case: bool) -> None:
+  def _Set(self, filter_string:str, ignore_case:bool) -> None:
     """Assigns values to filters.
 
     Store the literal values and compiled regular expressions in their
@@ -687,7 +667,7 @@ class FilterMatch(object):
       filter_string, ignore_case)
 
   def _DecomposeString(
-      self, filter_string: str, ignore_case: bool) -> tuple:
+      self, filter_string:str, ignore_case:bool) -> tuple:
     """Returns a tuple of lists of compiled and literal strings for matching.
 
     Args:
@@ -728,7 +708,7 @@ class FilterMatch(object):
 
     return (literal_substrs, re_substrs)
 
-  def Match(self, value: str | list[str] | list[list[str]]) -> bool:
+  def Match(self, value:str|list[str]|list[list[str]]) -> bool:
     """Returns if a value matches the filter."""
 
     # If we have a list of attributes, recurse down to find match.

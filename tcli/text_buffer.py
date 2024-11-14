@@ -27,7 +27,7 @@ class TextBuffer(object):
     buffers: Dictionary for storing/retrieving named text buffers.
   """
 
-  def __init__(self):
+  def __init__(self) -> None:
     self._buffers = collections.defaultdict(str)
 
   def Append(self, text_buffer:str, line:str) -> None:

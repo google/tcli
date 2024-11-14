@@ -35,9 +35,11 @@ server, which may be one of:
 
 import collections
 import os
+import typing
 from absl import flags
 from absl import logging
 from tcli import inventory_base
+from tcli.inventory_base import CmdRequest
 from tcli.inventory_base import AuthError       # pylint: disable=unused-import
 from tcli.inventory_base import InventoryError  # pylint: disable=unused-import
 
@@ -50,21 +52,20 @@ from tcli.inventory_base import InventoryError  # pylint: disable=unused-import
 ## Note: Two values will be created for each attribute. The second will be
 ## prefixed with an 'x' to be used for inverse matching (exclusions).
 DEVICE_ATTRIBUTES = inventory_base.DEVICE_ATTRIBUTES
+#TODO(harro): Prevent this from being overridden by inventory_base.__init__
 DEVICE_ATTRIBUTES['pop'] = inventory_base.Attribute(
     'pop', '', None,
-    '\n    Limit device lists to specific pop/s', command_flag=True)
+    '\n    Limit device lists to specific pop/s')
 DEVICE_ATTRIBUTES['realm'] = inventory_base.Attribute(
     'realm', 'lab', ['prod', 'lab'],
-    '\n    Limit the device list to a specific realm/s.', command_flag=True)
+    '\n    Limit the device list to a specific realm/s.')
 DEVICE_ATTRIBUTES['vendor'] = inventory_base.Attribute(
     'vendor', '', ['cisco', 'juniper'],
-    '\n    Limit device lists to a specific vendor/s', display_case='title',
-    command_flag=True)
+    '\n    Limit device lists to a specific vendor/s', display_case='title')
 
 # Set here if known.
 # In the case here this will be overwritten once the CSV content is known.
 DEVICE = inventory_base.DEVICE
-
 
 # TODO(harro): Handle the 'flags' attribute and filtering.
 
@@ -105,7 +106,9 @@ class Inventory(inventory_base.Inventory):
 
   SOURCE = 'csv'
 
-  def _ParseDevicesFromCsv(self, buf, separator=','):
+  def _ParseDevicesFromCsv(
+      self, buf:typing.TextIO,
+      separator:str=',') -> dict[str, typing.NamedTuple]:
     """Parses buffer into tabular format.
 
     Strips off comments (preceded by '#').
@@ -142,13 +145,13 @@ class Inventory(inventory_base.Inventory):
     # the header of an optional list as the last column.
 
     # Read in the header line which we will use to name the fields.
-    line = buf.readline()
+    row = buf.readline()
     header_str = ''
-    while line and not header_str:
+    while row and not header_str:
       # Remove comments.
-      header_str = line.split('#')[0].strip()
+      header_str = row.split('#')[0].strip()
       if not header_str:
-        line = buf.readline()
+        row = buf.readline()
 
     # Header line found, split into fields.
     header_list = header_str.split(separator)
@@ -160,31 +163,29 @@ class Inventory(inventory_base.Inventory):
           'Found: "%s".' % header_str)
     # Strip device, it will be used for the index.
     header_list = header_list[1 :]
-    header_length = len(header_list)
+    row_length = len(header_list)
     # Data format for a single device entry.
     DEVICE = collections.namedtuple('Device', header_list)
 
     # pylint: enable=invalid-name
     devices = {}
     # xreadlines would be better but not supported by StringIO for testing.
-    for line in buf:
+    for row in buf:
       # Support commented lines, provide '#' is first character of line.
-      line = line.strip()
-      if not line or line.startswith('#'):
+      row = row.strip()
+      if not row or row.startswith('#'):
         continue
-      row_list = line.split(separator)
+      row = row.split(separator)
       # Strip excess whitespace.
-      row_list = [l.strip() for l in row_list]
-      device_name = row_list[0]
-      row_list = row_list[1 :]
+      row = [l.strip() for l in row]
+      (device_name, row) = (row[0], row[1 :])
       if header_list[-1] == 'flags':
         # Provided the last header is 'flags' then accept extra columns.
         # Entries that trail on the rhs are gathered into a list under flags.
-        device_flags = row_list[header_length - 1 :]
-        row_list = row_list[0:header_length - 1]
-        row_list.append(device_flags)
+        (device_flags, row) = (row[row_length -1:], row[:row_length -1])
+        row.append(device_flags) # type: ignore
       try:
-        devices[device_name] = DEVICE(*row_list)
+        devices[device_name] = DEVICE(*row)
       except TypeError:
         raise ValueError('Final column header must be "flags" if'
                          ' rows are to be variable length.\n'
@@ -199,8 +200,9 @@ class Inventory(inventory_base.Inventory):
       logging.debug('Reading device inventory for file "%s".', FLAGS.inventory)
       self._devices = self._ParseDevicesFromCsv(csv_file)
 
-  def _SendRequests(
-      self, requests_callbacks: tuple, deadline: float|None=None) -> None:
+  def SendRequests(
+      self, requests_callbacks:list[tuple[CmdRequest, typing.Callable]],
+      deadline: float|None=None) -> None:
     """Submit command requests to device connection service."""
 
     for (request, callback) in requests_callbacks:

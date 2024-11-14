@@ -61,7 +61,7 @@ from tcli import command_parser
 from tcli import command_register
 from tcli import command_response
 from tcli import text_buffer
-from tcli.command_parser import ParseError
+from tcli.command_parser import ParseError, I
 from tcli.tcli_textfsm import clitable
 from tcli.tcli_textfsm.clitable import CliTableError
 from textfsm import terminal
@@ -129,20 +129,20 @@ GROSS_TITLE_COLOR = ['bold', 'red', 'bg_green']
 DEFAULT_CONFIGFILE = os.path.join(os.path.expanduser('~'), '.tclirc')
 
 FLAGS = flags.FLAGS
-I = command_parser.I
 
 flags.DEFINE_string(
-  'cmds', None,
-  f'{I}Commands (newline separated) to send to devices in the target list.'
-  f"{I}'Prompting' commands, commands that request further input from the"
-  f'{I}user before completing are discouraged and will fail.\n'
-  f'{I}Examples to avoid: telnet, ping, reload.', short_name='C')
+  'cmds', None, """
+    Commands (newline separated) to send to devices in the target list.
+    'Prompting' commands, commands that request further input from the
+    user before completing are discouraged and will fail.
+
+    Examples to avoid: telnet, ping, reload.""", short_name='C')
 
 flags.DEFINE_string(
-  'config_file', DEFAULT_CONFIGFILE,
-  f'{I}Configuration file to read. Lines in this file will be read into '
-  f'{I}buffer "startup" and played.'
-  f"{I}Skipped if file name is the string 'None|none'", short_name='R')
+  'config_file', DEFAULT_CONFIGFILE, """
+    Configuration file to read. Lines in this file will be read into '
+    buffer "startup" and played.'
+    Skipped if file name is the string 'None|none'""", short_name='R')
 
 flags.DEFINE_boolean(
   'dry_run', False,
@@ -256,7 +256,7 @@ class TCLI(object):
 
     tcli_obj.cli_parser = command_parser.CommandParser()
     # Only register base class commands, not the inventory.
-    tcli_obj.RegisterCommands(tcli_obj.cli_parser)
+    command_register.RegisterCommands(tcli_obj, tcli_obj.cli_parser)
     # Only support commands that are valid when called inline.
     tcli_obj.cli_parser.InlineOnly()
 
@@ -285,23 +285,6 @@ class TCLI(object):
   def Motd(self) ->None:
     """Display message of the day."""
     self._Print(MOTD, msgtype='system')
-
-  def _SetFiltersFromDefaults(
-      self, inv:inventory.Inventory) -> None:
-    """Trawls filters and sets the matching commands via the cli_parser."""
-
-    # Commands that may be specified in flags.
-    for filter_name in inv.inclusions:
-      try:
-        self.cli_parser.ExecWithDefault(filter_name)
-      except ValueError:
-        pass
-  
-    for filter_name in inv.exclusions:
-      try:
-        self.cli_parser.ExecWithDefault(filter_name)
-      except ValueError:
-        pass
 
   def _SetPrompt(self, inv: inventory.Inventory) -> None:
     """Sets the prompt string with current targets."""
@@ -360,11 +343,7 @@ class TCLI(object):
               msgtype='warning')
           raise EOFError()
 
-  def RegisterCommands(self, cli_parser:command_parser.CommandParser) ->None:
-    """Register commands supported by TCLI core functions."""
-    command_register.RegisterCommands(self, cli_parser, I)
-
-  def StartUp(self, commands, interactive) ->None:
+  def StartUp(self, commands, interactive) -> None:
     """Runs rc file commands and initial startup tasks.
 
       The RC file may contain any valid TCLI commands including commands to send
@@ -390,34 +369,21 @@ class TCLI(object):
       self.interactive = True
     if not self.inventory:
       self._InitInventory()
-    self.RegisterCommands(self.cli_parser)
+    command_register.RegisterCommands(self, self.cli_parser)
     if self.inventory:
-      self._SetFiltersFromDefaults(self.inventory)
+      self.inventory.SetFiltersFromDefaults(self.cli_parser)
     # Set some markup flags early.
-    self.SetDefaults()
+    # We bracket the RC file and apply/reapply the default settings from Flags.
+    command_register.SetFlagDefaults(self.cli_parser)
     if self.interactive:
       # Set safe mode.
       self.cli_parser.ExecHandler('safemode', ['on'], False)
       # Apply user settings.
       self._ParseRCFile()
       # Reapply flag values that may have changed by RC commands.
-      self.SetDefaults()
+      command_register.SetFlagDefaults(self.cli_parser)
     if commands:
       self.ParseCommands(commands)
-
-  def SetDefaults(self) ->None:
-    """Parses command line flags ad sets default attributes.
-
-      Commands here affect data representation/presentation but are otherwise
-      harmless. Excuted both before and after any commands that may exist in a
-      config file so that RC executed commands get the benefits without being
-      able to override explicit flags.
-    """
-
-    # Calling the handlers directly will not be logged.
-    for command_name in ('color', 'color_scheme', 'display', 'filter',
-                         'linewrap', 'mode', 'timeout'):
-      self.cli_parser.ExecWithDefault(command_name)
 
   # pylint: disable=unused-argument
   def Completer(self, word:str, state:int) -> str|None:
@@ -537,7 +503,7 @@ class TCLI(object):
     """
 
     def _FlushCommands(command_list:list[str]) -> None:
-      """Submit commands and clear list."""
+      """Submit pending commands and clear list."""
 
       if command_list:
         # Flush all accumulated commands beforehand.
@@ -553,14 +519,13 @@ class TCLI(object):
     for command in commands.split('\n'):
       command = command.strip()
       # Skip blank lines.
-      if not command:
-        continue
+      if not command: continue
 
       # TCLI commands.
       if command.startswith(SLASH):
         _FlushCommands(command_list)
         # Remove command prefix and submit to TCLI command interpreter.
-        self.TildeCmd(command[1 :])
+        self.TCLICmd(command[1 :])
       else:
         # Backend commands.
         # Look for inline commands.
@@ -574,7 +539,7 @@ class TCLI(object):
           logging.debug('Inline Cmd: %s.', inline_commands)
           inline_tcli = copy.copy(self)
           for cmd in inline_commands:
-            inline_tcli.TildeCmd(cmd)
+            inline_tcli.TCLICmd(cmd)
           inline_tcli.ParseCommands(command_prefix)
         else:
           # Otherwise continue collecting multiple commands to send at once.
@@ -596,9 +561,8 @@ class TCLI(object):
         self._FormatResponse(row[0], row[1])
         row = self.cmd_response.GetRow()
 
-  def CmdRequests(
-    self, device_list:list[str], command_list:list[str], explicit_cmd:bool=False
-    ) -> None:
+  def CmdRequests(self, device_list:list[str], command_list:list[str],
+                  explicit_cmd:bool=False) -> None:
     """Submits command list to devices and receives responses.
 
     Args:
@@ -639,7 +603,7 @@ class TCLI(object):
 
       # Create command requests.
       for host in device_list:
-        req = self.inventory.CmdRequest(host, command, self.mode)
+        req = inventory.CmdRequest(host, command, self.mode)
         # Track the order that commands are submitted.
         # Responses are received in any order and
         # we use the row ID to reassemble.
@@ -667,7 +631,7 @@ class TCLI(object):
                   msgtype='warning')
     logging.debug('CmdRequests: All callbacks completed.')
 
-  def TildeCmd(self, line:str) -> None:
+  def TCLICmd(self, line:str) -> None:
     f"""TCLI configuration command.
 
     Args:
@@ -692,7 +656,7 @@ class TCLI(object):
         # Don't log a logstop|recordstop' to a buffer as we stop logging.
         if command in ('recordstop', 'logstop') and args and args[0] == buf:
           continue
-        # Prefix tilde back onto logs.
+        # Add back the command prefix for the logs.
         self.buffers.Append(buf, SLASH + line)
 
     # Command execution.
@@ -836,9 +800,7 @@ class TCLI(object):
   def _Pipe(self, output:str, pipe:str='') -> str|None:
     """Creates pipe for filtering command output."""
 
-    if not pipe:
-      return output
-
+    if not pipe: return output
     pipe = pipe.lstrip('|')
     try:
       p = subprocess.Popen(
@@ -855,7 +817,6 @@ class TCLI(object):
       logging.debug('Output written to pipe:\n%s', output)
       logging.debug('Output read from pipe:\n%s', result)
       return result.decode('utf-8')
-
     except IOError:
       logging.error('IOerror writing/reading from pipe.')
       return
@@ -876,13 +837,14 @@ class TCLI(object):
     """Check if buffer is already being written to."""
 
     if buffername in (self.record, self.recordall, self.log, self.logall):
-      self._Print('Buffer: %s, already open for writing.' %
-                  repr(buffername), msgtype='warning')
+      self._Print(
+        f"Buffer: '{buffername}', already open for writing.", msgtype='warning')
       return True
 
     if buffername == self.playback:
-      self._Print("Buffer: %s, already open by 'play' command." %
-                  self.playback, msgtype='warning')
+      self._Print(
+        f"Buffer: '{self.playback}', already open by 'play' command.",
+        msgtype='warning')
       return True
 
     return False
@@ -968,10 +930,9 @@ class TCLI(object):
     default = args[0]
     if default == 'all':
       # Reapply explicit flags.
-      # TODO(harro): Only sets some core values (with flags), could reset more?
-      self.SetDefaults()
+      command_register.SetFlagDefaults(self.cli_parser)
       if self.inventory:
-        self._SetFiltersFromDefaults(self.inventory)
+        self.inventory.SetFiltersFromDefaults(self.cli_parser)
       return
   
     try:

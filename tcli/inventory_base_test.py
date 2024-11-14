@@ -32,8 +32,6 @@ class InventoryBaseTest(unittest.TestCase):
   def setUpClass(cls):
     super(InventoryBaseTest, cls).setUpClass()
     inventory_base.FLAGS([__file__,])
-    # To be safe, point at 'lab' rather than 'prod' domain.
-    inventory_base.FLAGS.realm = 'lab'
     def _FetchDevicesStub(self):
       # Fake inventory data, same columns as the CSV file.
       _d = collections.namedtuple('Device', ('pop', 'realm', 'vendor', 'flags'))
@@ -66,13 +64,13 @@ class InventoryBaseTest(unittest.TestCase):
   def testCmdRequestPresentation(self):
     """Test building commands requests to send to device connection service."""
 
-    self.inv.CmdRequest.UID = 0
-    request = self.inv.CmdRequest('device01', 'show vers', 'cli')
+    inventory_base.CmdRequest.UID = 0
+    request = inventory_base.CmdRequest('device01', 'show vers', 'cli')
     self.assertEqual('device01', request.target)
     self.assertEqual('show vers', request.command)
     self.assertEqual('cli', request.mode)
     self.assertEqual(1, request.uid)
-    request = self.inv.CmdRequest('device02', 'show vers', 'shell')
+    request = inventory_base.CmdRequest('device02', 'show vers', 'shell')
     self.assertEqual('device02', request.target)
     self.assertEqual('shell', request.mode)
 

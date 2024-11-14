@@ -15,6 +15,7 @@
 """Tests for tcli.inventory_csv."""
 
 import os
+import typing
 import unittest
 from io import StringIO    # pylint: disable=g-importing-member
 from unittest import mock
@@ -33,8 +34,6 @@ class UnitTestCSVInventory(unittest.TestCase):
   @classmethod
   def setUpClass(cls):
     super(UnitTestCSVInventory, cls).setUpClass()
-    # To be safe, point at 'lab' rather than 'prod' domain.
-    inventory.FLAGS.realm = 'lab'
 
   def setUp(self):
     super(UnitTestCSVInventory, self).setUp()
@@ -61,13 +60,13 @@ class UnitTestCSVInventory(unittest.TestCase):
                 'device_b, , CC, fx, fy, fz')
     result = self.inv._ParseDevicesFromCsv(StringIO(csv_text))
     # Row matches dictionary key
-    self.assertEqual(result['device_a'].bb, 'B')
+    self.assertEqual(result['device_a'].bb, 'B')    # type: ignore
     # Spaces trim from entries.
-    self.assertEqual(result['device_a'].ccc, 'C')
+    self.assertEqual(result['device_a'].ccc, 'C')   # type: ignore
     # Flags are a list.
-    self.assertEqual(result['device_a'].flags, ['f1', 'f2', 'f3'])
+    self.assertEqual(result['device_a'].flags, ['f1', 'f2', 'f3'])# type: ignore
     # Last entry is present and null column respected.
-    self.assertEqual(result['device_b'].ccc, 'CC')
+    self.assertEqual(result['device_b'].ccc, 'CC')  # type: ignore
 
   def testParseDevicesFromCsvFail(self):
     """Tests parsing invalid CSV data."""
@@ -108,7 +107,7 @@ class UnitTestCSVInventory(unittest.TestCase):
   def testSendRequests(self):
     """Tests command requests are pulled from file."""
     
-    class requestObject(object):
+    class requestObject(inventory.CmdRequest):
       uid = 0
       def __init__(self, target, command):
         self.target = target

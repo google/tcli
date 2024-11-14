@@ -17,6 +17,7 @@
 
 import re
 import shlex
+import typing
 
 # Command start with a slash, inline commands a double slash
 SLASH = '/'
@@ -70,14 +71,14 @@ class CommandParser(dict):
     # The command expects a bool and flips the value if unspecified.
     toggle = property(lambda self: self.attr['toggle'])
 
-  def _ShortCommand(self, short_name):
+  def _ShortCommand(self, short_name: str) -> str|None:
     """Find full command name for a short command letter."""
 
     for command_name in self:
       if self[command_name].short_name == short_name:
         return command_name
 
-  def _CommandExpand(self, line):
+  def _CommandExpand(self, line:str) -> tuple[str|None, str, bool]:
     """Strips off command name and append indicator.
 
     e.g. S -> ('safemode', '', False),
@@ -106,7 +107,7 @@ class CommandParser(dict):
         line = line.lstrip(' ')
     return (command_name, line, append)
 
-  def ExecHandler(self, command_name, args, append):
+  def ExecHandler(self, command_name:str, args:list[str], append:bool):
     """Execute the handler associated with this command."""
 
     if not self[command_name].handler:
@@ -115,7 +116,7 @@ class CommandParser(dict):
 
     return self[command_name].handler.__call__(command_name, args, append)
 
-  def ExecWithDefault(self, command_name):
+  def ExecWithDefault(self, command_name:str):
     """Executes command handler with the default provided as the argument.
 
     Args:
@@ -148,11 +149,11 @@ class CommandParser(dict):
 
     return self.ExecHandler(command_name, [value], False)
 
-  def GetCommand(self, command_name):
+  def GetCommand(self, command_name:str) -> _Command|None:
     """Returns object for a command, None otherwise."""
     return self.get(command_name)
 
-  def GetDefault(self, command_name):
+  def GetDefault(self, command_name:str) -> typing.Any:
     """Returns default value for a command.
 
     Precondition, command is valid and exists.
@@ -165,14 +166,14 @@ class CommandParser(dict):
     """
     return self[command_name].default_value
 
-  def InlineOnly(self):
+  def InlineOnly(self) -> None:
     """Unregister all non-inline commands from parser."""
 
     for command_name in [c for c in self]:
       if not self[command_name].inline:
         self.UnRegisterCommand(command_name)
 
-  def ParseCommandLine(self, line):
+  def ParseCommandLine(self, line:str) -> tuple[str, list[str], bool]:
     """Parse string into command and arguments.
 
     Split line into command, list of arguments and bool indicating append
@@ -241,10 +242,12 @@ class CommandParser(dict):
 
     return (command_name, arguments, append)
 
-  def RegisterCommand(self, command_name, help_str, short_name='', min_args=0,
-                      max_args=1, default_value=None, append=False,
-                      inline=False, raw_arg=False, regexp=False, toggle=False,
-                      handler=lambda: None, completer=lambda: None):
+  def RegisterCommand(self, command_name:str, help_str:str, short_name:str='', 
+                      min_args:int=0, max_args:int=1, default_value=None, 
+                      append:bool=False, inline:bool=False, raw_arg:bool=False,
+                      regexp:bool=False, toggle:bool=False,
+                      handler:typing.Callable=lambda: None,
+                      completer:typing.Callable=lambda: None) -> None:
     """Adds command to parser so parser can determine if well-formed or not.
 
     Args:
@@ -278,7 +281,7 @@ class CommandParser(dict):
         'completer': completer
     })
 
-  def UnRegisterCommand(self, command_name):
+  def UnRegisterCommand(self, command_name:str) -> None:
     """Remove support from command.
 
     Precondition, command is valid and exists.

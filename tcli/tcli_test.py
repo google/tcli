@@ -22,6 +22,7 @@ import os
 from absl import flags
 import unittest
 from unittest import mock
+from tcli import command_register
 from tcli import inventory_base as inventory
 from tcli import tcli_lib as tcli
 from tcli.tcli_textfsm import clitable
@@ -159,7 +160,7 @@ class UnitTestTCLI(unittest.TestCase):
 
     self.tcli_obj._Print = mock.Mock()
 
-    self.tcli_obj.RegisterCommands(self.tcli_obj.cli_parser)
+    command_register.RegisterCommands(self.tcli_obj, self.tcli_obj.cli_parser)
     self.tcli_obj.cli_parser.RegisterCommand(
         'somecommand', 'somecommand help', append=True, regexp=True,
         handler=lambda command, args, append: (command, args, append))
@@ -202,7 +203,7 @@ class UnitTestTCLI(unittest.TestCase):
     self.tcli_obj.color = not tcli.FLAGS.color
     self.tcli_obj.timeout = 30
 
-    self.tcli_obj.SetDefaults()
+    command_register.SetFlagDefaults(self.tcli_obj.cli_parser)
     self.assertEqual(tcli.FLAGS.color, self.tcli_obj.color)
     self.assertEqual(tcli.FLAGS.timeout, self.tcli_obj.timeout)
 
@@ -219,17 +220,13 @@ class UnitTestTCLI(unittest.TestCase):
 
     with mock.patch.object(self.tcli_obj, 'ParseCommands'):
       with mock.patch.object(self.tcli_obj, '_InitInventory'):
-        with mock.patch.object(self.tcli_obj, 'SetDefaults') as mock_parse:
-          self.tcli_obj.StartUp(None, False)
-          # Without target or cmds, interactive is set to True.
-          self.assertTrue(self.tcli_obj.interactive)
-          mock_parse.assert_has_calls([mock.call(), mock.call()])
+        self.tcli_obj.StartUp(None, False)
+        # Without target or cmds, interactive is set to True.
+        self.assertTrue(self.tcli_obj.interactive)
 
-        with mock.patch.object(self.tcli_obj, 'SetDefaults') as mock_parse:
-          self.tcli_obj.StartUp('bogus', False)
-          # Without target or cmds, interactive is set to True.
-          self.assertFalse(self.tcli_obj.interactive)
-          mock_parse.assert_called_once_with()
+        self.tcli_obj.StartUp('bogus', False)
+        # With target or cmds, interactive is set by StartUp.
+        self.assertFalse(self.tcli_obj.interactive)
 
   def testTildeCompleter(self):
 
@@ -397,7 +394,7 @@ class UnitTestTCLI(unittest.TestCase):
 
     tcli.inventory.DEVICE_ATTRIBUTES = {
         'vendor': tcli.inventory.inventory_base.Attribute(
-            'vendor', '', None, '', display_case='title', command_flag=False)}
+            'vendor', '', None, '', display_case='title')}
     # Initialise the textfsm engine in TCLI.
     self.tcli_obj.filter = 'default_index'
     self.tcli_obj.filter_engine = clitable.CliTable(self.tcli_obj.filter,
@@ -555,18 +552,18 @@ class UnitTestTCLI(unittest.TestCase):
 
   def testColor(self):
     self.tcli_obj.color = False
-    self.tcli_obj.TildeCmd('color on')
+    self.tcli_obj.TCLICmd('color on')
     self.assertTrue(self.tcli_obj.color)
     self.tcli_obj.color = False
-    self.tcli_obj.TildeCmd('color On')
+    self.tcli_obj.TCLICmd('color On')
     self.assertTrue(self.tcli_obj.color)
     self.tcli_obj.color = False
-    self.tcli_obj.TildeCmd('color True')
+    self.tcli_obj.TCLICmd('color True')
     self.assertTrue(self.tcli_obj.color)
     self.tcli_obj.color = False
-    self.tcli_obj.TildeCmd('color')
+    self.tcli_obj.TCLICmd('color')
     self.assertTrue(self.tcli_obj.color)
-    self.tcli_obj.TildeCmd('color')
+    self.tcli_obj.TCLICmd('color')
     self.assertEqual(False, self.tcli_obj.color)
 
     self.tcli_obj.color = True
@@ -618,7 +615,7 @@ class UnitTestTCLI(unittest.TestCase):
           ['cat alpha', 'cat alpha', 'cat beta'])
 
     # Mixed commands some for the device some tilde commands.
-    with mock.patch.object(self.tcli_obj, 'TildeCmd'):
+    with mock.patch.object(self.tcli_obj, 'TCLICmd'):
       with mock.patch.object(self.tcli_obj, 'CmdRequests') as mock_request:
         self.tcli_obj.ParseCommands(' cat alpha \n  %shelp \n\n\n%scolor  ' %
                                     (tcli.SLASH, tcli.SLASH))
@@ -670,18 +667,18 @@ class UnitTestTCLI(unittest.TestCase):
   def testNumberofArgs(self):
 
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
-      self.tcli_obj.TildeCmd('help badarg')
+      self.tcli_obj.TCLICmd('help badarg')
       mock_print.assert_called_once_with(
           'Invalid number of arguments, found "1".', msgtype='warning')
 
-      self.tcli_obj.TildeCmd('buffer boo badarg')
+      self.tcli_obj.TCLICmd('buffer boo badarg')
       mock_print.assert_called_with(
           'Invalid number of arguments, found "2".', msgtype='warning')
 
   def testTildeExit(self):
 
-    self.assertRaises(EOFError, self.tcli_obj.TildeCmd, 'exit')
-    self.assertRaises(EOFError, self.tcli_obj.TildeCmd, 'quit')
+    self.assertRaises(EOFError, self.tcli_obj.TCLICmd, 'exit')
+    self.assertRaises(EOFError, self.tcli_obj.TCLICmd, 'quit')
 
   def testTildeColor(self):
 
@@ -690,26 +687,26 @@ class UnitTestTCLI(unittest.TestCase):
 
     # Color toggles on and off.
     self.assertFalse(self.tcli_obj.color)
-    self.tcli_obj.TildeCmd('color on')
+    self.tcli_obj.TCLICmd('color on')
     self.assertTrue(self.tcli_obj.color)
-    self.tcli_obj.TildeCmd('color off')
+    self.tcli_obj.TCLICmd('color off')
     self.assertFalse(self.tcli_obj.color)
-    self.tcli_obj.TildeCmd('color')
+    self.tcli_obj.TCLICmd('color')
     self.assertTrue(self.tcli_obj.color)
     # Invalid bool rejected.
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
-      self.tcli_obj.TildeCmd('color bogus')
+      self.tcli_obj.TCLICmd('color bogus')
       mock_print.assert_called_once_with(
           "Error: Argument must be 'on' or 'off'.", msgtype='warning')
     # Valid color_scheme accepted
-    self.tcli_obj.TildeCmd('color_scheme light')
+    self.tcli_obj.TCLICmd('color_scheme light')
     self.assertEqual('light', self.tcli_obj.color_scheme)
-    self.tcli_obj.TildeCmd('color_scheme dark')
+    self.tcli_obj.TCLICmd('color_scheme dark')
     self.assertEqual('dark', self.tcli_obj.color_scheme)
 
     # Invalid color scheme rejected
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
-      self.tcli_obj.TildeCmd('color_scheme bogus')
+      self.tcli_obj.TCLICmd('color_scheme bogus')
       mock_print.assert_called_once_with(
           "Error: Unknown color scheme: 'bogus'", msgtype='warning')
 
@@ -717,27 +714,27 @@ class UnitTestTCLI(unittest.TestCase):
     """Tests safemode toggle."""
 
     self.tcli_obj.safemode = False
-    self.tcli_obj.TildeCmd('safemode on')
+    self.tcli_obj.TCLICmd('safemode on')
     self.assertTrue(self.tcli_obj.safemode)
-    self.tcli_obj.TildeCmd('safemode')
+    self.tcli_obj.TCLICmd('safemode')
     self.assertFalse(self.tcli_obj.safemode)
 
   def testVerbose(self):
     """Tests verbose toggle."""
 
     self.tcli_obj.verbose = False
-    self.tcli_obj.TildeCmd('verbose on')
+    self.tcli_obj.TCLICmd('verbose on')
     self.assertTrue(self.tcli_obj.verbose)
-    self.tcli_obj.TildeCmd('verbose')
+    self.tcli_obj.TCLICmd('verbose')
     self.assertFalse(self.tcli_obj.verbose)
 
   def testLineWrap(self):
     """Tests linewrap toggle."""
 
     self.tcli_obj.linewrap = False
-    self.tcli_obj.TildeCmd('linewrap on')
+    self.tcli_obj.TCLICmd('linewrap on')
     self.assertTrue(self.tcli_obj.linewrap)
-    self.tcli_obj.TildeCmd('linewrap')
+    self.tcli_obj.TCLICmd('linewrap')
     self.assertFalse(self.tcli_obj.linewrap)
 
   def testTildeDisplay(self):
@@ -745,17 +742,17 @@ class UnitTestTCLI(unittest.TestCase):
     self.tcli_obj.display = 'raw'
 
     # Invalid display rejected.
-    self.tcli_obj.TildeCmd('display boo')
+    self.tcli_obj.TCLICmd('display boo')
     self.assertEqual('raw', self.tcli_obj.display)
-    self.tcli_obj.TildeCmd('display tsvboo')
+    self.tcli_obj.TCLICmd('display tsvboo')
     self.assertEqual('raw', self.tcli_obj.display)
 
     # Valid display accepted.
-    self.tcli_obj.TildeCmd('display csv')
+    self.tcli_obj.TCLICmd('display csv')
     self.assertEqual('csv', self.tcli_obj.display)
 
     # Valid short command display accepted.
-    self.tcli_obj.TildeCmd('D raw')
+    self.tcli_obj.TCLICmd('D raw')
     self.assertEqual('raw', self.tcli_obj.display)
 
   def testTildeMode(self):
@@ -763,27 +760,27 @@ class UnitTestTCLI(unittest.TestCase):
     self.tcli_obj.mode = 'cli'
 
     # Invalid mode rejected.
-    self.tcli_obj.TildeCmd('mode boo')
+    self.tcli_obj.TCLICmd('mode boo')
     self.assertEqual('cli', self.tcli_obj.mode)
-    self.tcli_obj.TildeCmd('mode clishell')
+    self.tcli_obj.TCLICmd('mode clishell')
     self.assertEqual('cli', self.tcli_obj.mode)
 
     # Valid mode accepted.
-    self.tcli_obj.TildeCmd('mode shell')
+    self.tcli_obj.TCLICmd('mode shell')
     self.assertEqual('shell', self.tcli_obj.mode)
 
     # Valid short command display accepted.
-    self.tcli_obj.TildeCmd('M gated')
+    self.tcli_obj.TCLICmd('M gated')
     self.assertEqual('gated', self.tcli_obj.mode)
 
-  def testTildeCmd(self):
+  def testTCLICmd(self):
     """b/2303768 Truncation of characters in /command."""
 
     self.tcli_obj.inventory.targets = ''
     self.tcli_obj.inventory.device_list = set()
     cmd = 'cat bogus'
     with mock.patch.object(self.tcli_obj, 'CmdRequests') as mock_request:
-      self.tcli_obj.TildeCmd('command %s' % cmd)
+      self.tcli_obj.TCLICmd('command %s' % cmd)
       mock_request.assert_called_once_with(set(), ['cat bogus'], True)
 
   def testDisplayBadTable(self):
@@ -797,7 +794,7 @@ class UnitTestTCLI(unittest.TestCase):
 
     # Use 'buffer' as test command as it accepts and argument
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
-      self.tcli_obj.TildeCmd('buffer a.b')
+      self.tcli_obj.TCLICmd('buffer a.b')
       # Argument to buffer must be an alphanum.
       mock_print.assert_called_once_with(
           'Arguments with alphanumeric characters only.', msgtype='warning')
@@ -806,7 +803,7 @@ class UnitTestTCLI(unittest.TestCase):
     """Tests setting filter via cli."""
 
     self.tcli_obj.filter_engine = None
-    self.tcli_obj.TildeCmd('filter default_index')
+    self.tcli_obj.TCLICmd('filter default_index')
     self.assertTrue(self.tcli_obj.filter_engine)
 
     self.tcli_obj.filter_engine.template_dir = tcli.FLAGS.template_dir
@@ -821,7 +818,7 @@ class UnitTestTCLI(unittest.TestCase):
 
     # Bad filter value.
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
-      self.tcli_obj.TildeCmd('filter not_a_valid_filter')
+      self.tcli_obj.TCLICmd('filter not_a_valid_filter')
       mock_print.assert_called_once_with(
           "Invalid filter 'not_a_valid_filter'.", msgtype='warning')
 
@@ -833,27 +830,27 @@ class UnitTestTCLI(unittest.TestCase):
     self.tcli_obj.logall = None
     self.tcli_obj.log = None
 
-    self.tcli_obj.TildeCmd('record boo')
+    self.tcli_obj.TCLICmd('record boo')
     self.assertEqual('boo', self.tcli_obj.record)
-    self.tcli_obj.TildeCmd('recordall hoo')
+    self.tcli_obj.TCLICmd('recordall hoo')
     self.assertEqual('hoo', self.tcli_obj.recordall)
 
-    self.tcli_obj.TildeCmd('log boo2')
+    self.tcli_obj.TCLICmd('log boo2')
     self.assertEqual('boo2', self.tcli_obj.log)
-    self.tcli_obj.TildeCmd('logall hoo2')
+    self.tcli_obj.TCLICmd('logall hoo2')
     self.assertEqual('hoo2', self.tcli_obj.logall)
 
-    self.tcli_obj.TildeCmd('recordstop boo')
+    self.tcli_obj.TCLICmd('recordstop boo')
     self.assertIsNone(self.tcli_obj.record)
-    self.tcli_obj.TildeCmd('recordstop hoo')
+    self.tcli_obj.TCLICmd('recordstop hoo')
     self.assertIsNone(self.tcli_obj.recordall)
 
     # Clears log but not logall.
-    self.tcli_obj.TildeCmd('logstop boo2')
+    self.tcli_obj.TCLICmd('logstop boo2')
     self.assertIsNone(self.tcli_obj.log)
     self.assertEqual('hoo2', self.tcli_obj.logall)
 
-    self.tcli_obj.TildeCmd('logstop hoo2')
+    self.tcli_obj.TCLICmd('logstop hoo2')
     self.assertIsNone(self.tcli_obj.logall)
 
     self.tcli_obj.record = None
@@ -861,12 +858,12 @@ class UnitTestTCLI(unittest.TestCase):
     self.tcli_obj.logall = None
     self.tcli_obj.log = None
 
-    self.tcli_obj.TildeCmd('record hello')
-    self.tcli_obj.TildeCmd('recordall world')
-    self.tcli_obj.TildeCmd('recordall hello')
+    self.tcli_obj.TCLICmd('record hello')
+    self.tcli_obj.TCLICmd('recordall world')
+    self.tcli_obj.TCLICmd('recordall hello')
     self.assertEqual('hello', self.tcli_obj.record)
     self.assertEqual('world', self.tcli_obj.recordall)
-    self.tcli_obj.TildeCmd('logstop hello')
+    self.tcli_obj.TCLICmd('logstop hello')
     self.assertIsNone(self.tcli_obj.record)
     self.assertEqual('world', self.tcli_obj.recordall)
 
@@ -875,14 +872,14 @@ class UnitTestTCLI(unittest.TestCase):
     self.tcli_obj.logall = None
     self.tcli_obj.log = None
 
-    self.tcli_obj.TildeCmd('log hello')
-    self.tcli_obj.TildeCmd('logall world')
-    self.tcli_obj.TildeCmd('logall hello')
-    self.tcli_obj.TildeCmd('recordall hello')
+    self.tcli_obj.TCLICmd('log hello')
+    self.tcli_obj.TCLICmd('logall world')
+    self.tcli_obj.TCLICmd('logall hello')
+    self.tcli_obj.TCLICmd('recordall hello')
     self.assertEqual('hello', self.tcli_obj.log)
     self.assertEqual('world', self.tcli_obj.logall)
     self.assertIsNone(self.tcli_obj.recordall)
-    self.tcli_obj.TildeCmd('logstop hello')
+    self.tcli_obj.TCLICmd('logstop hello')
     self.assertIsNone(self.tcli_obj.log)
     self.assertEqual('world', self.tcli_obj.logall)
 
@@ -892,12 +889,12 @@ class UnitTestTCLI(unittest.TestCase):
     self.tcli_obj.log = None
 
     # Buffer allocation with append should be the same
-    self.tcli_obj.TildeCmd('record{} hello'.format(APPEND))
-    self.tcli_obj.TildeCmd('recordall{} world'.format(APPEND))
-    self.tcli_obj.TildeCmd('recordall{} hello'.format(APPEND))
+    self.tcli_obj.TCLICmd('record{} hello'.format(APPEND))
+    self.tcli_obj.TCLICmd('recordall{} world'.format(APPEND))
+    self.tcli_obj.TCLICmd('recordall{} hello'.format(APPEND))
     self.assertEqual('hello', self.tcli_obj.record)
     self.assertEqual('world', self.tcli_obj.recordall)
-    self.tcli_obj.TildeCmd('logstop hello')
+    self.tcli_obj.TCLICmd('logstop hello')
     self.assertIsNone(self.tcli_obj.record)
     self.assertEqual('world', self.tcli_obj.recordall)
 
@@ -906,14 +903,14 @@ class UnitTestTCLI(unittest.TestCase):
     self.tcli_obj.logall = None
     self.tcli_obj.log = None
 
-    self.tcli_obj.TildeCmd('log{} hello'.format(APPEND))
-    self.tcli_obj.TildeCmd('logall{} world'.format(APPEND))
-    self.tcli_obj.TildeCmd('logall{} hello'.format(APPEND))
-    self.tcli_obj.TildeCmd('recordall{} hello'.format(APPEND))
+    self.tcli_obj.TCLICmd('log{} hello'.format(APPEND))
+    self.tcli_obj.TCLICmd('logall{} world'.format(APPEND))
+    self.tcli_obj.TCLICmd('logall{} hello'.format(APPEND))
+    self.tcli_obj.TCLICmd('recordall{} hello'.format(APPEND))
     self.assertEqual('hello', self.tcli_obj.log)
     self.assertEqual('world', self.tcli_obj.logall)
     self.assertIsNone(self.tcli_obj.recordall)
-    self.tcli_obj.TildeCmd('logstop hello')
+    self.tcli_obj.TCLICmd('logstop hello')
     self.assertIsNone(self.tcli_obj.log)
     self.assertEqual('world', self.tcli_obj.logall)
 
@@ -922,12 +919,12 @@ class UnitTestTCLI(unittest.TestCase):
 
     # Record commands but not escape commands.
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
-      self.tcli_obj.TildeCmd('record hello')
+      self.tcli_obj.TCLICmd('record hello')
       self.tcli_obj.ParseCommands('A test')
       self.tcli_obj.ParseCommands('A two\nline test')
-      self.tcli_obj.TildeCmd('an invalid escape cmd')
+      self.tcli_obj.TCLICmd('an invalid escape cmd')
       # A valid SLASH command.
-      self.tcli_obj.TildeCmd('help')
+      self.tcli_obj.TCLICmd('help')
       self.assertEqual(
           'A test\nA two\nline test',
           self.tcli_obj.buffers.GetBuffer('hello'))
@@ -936,7 +933,7 @@ class UnitTestTCLI(unittest.TestCase):
 
     # Record and append.
     self.tcli_obj.record = None
-    self.tcli_obj.TildeCmd('record{} hello'.format(APPEND))
+    self.tcli_obj.TCLICmd('record{} hello'.format(APPEND))
     self.tcli_obj.ParseCommands('Append test')
     self.tcli_obj.ParseCommands('Append again\non two lines')
     self.assertEqual(
@@ -944,28 +941,28 @@ class UnitTestTCLI(unittest.TestCase):
         self.tcli_obj.buffers.GetBuffer('hello'))
 
     # Stop and restart recording. Buffer should be cleared.
-    self.tcli_obj.TildeCmd('logstop hello')
-    self.tcli_obj.TildeCmd('record hello')
+    self.tcli_obj.TCLICmd('logstop hello')
+    self.tcli_obj.TCLICmd('record hello')
     self.assertEqual('hello', self.tcli_obj.record)
     # Haven't written yet, so there is no buffer.
     self.assertRaises(AttributeError, self.tcli_obj.buffers.GetBuffer, 'hello')
 
     # Record to the newly cleared buffer.
     self.tcli_obj.ParseCommands('A test')
-    self.tcli_obj.TildeCmd('logstop hello')
-    self.tcli_obj.TildeCmd('record{} hello'.format(APPEND))
+    self.tcli_obj.TCLICmd('logstop hello')
+    self.tcli_obj.TCLICmd('record{} hello'.format(APPEND))
     self.assertEqual('A test', self.tcli_obj.buffers.GetBuffer('hello'))
 
     self.tcli_obj.record = self.tcli_obj.recordall = ''
     self.tcli_obj.log = self.tcli_obj.logall = ''
 
     # Record command and escape commands.
-    self.tcli_obj.TildeCmd('recordall hello')
+    self.tcli_obj.TCLICmd('recordall hello')
     self.tcli_obj.ParseCommands('A test')
     self.tcli_obj.ParseCommands('A two\nline test')
-    self.tcli_obj.TildeCmd('an invalid escape cmd')
+    self.tcli_obj.TCLICmd('an invalid escape cmd')
     # A valid SLASH command.
-    self.tcli_obj.TildeCmd('buffer hello')
+    self.tcli_obj.TCLICmd('buffer hello')
     self.assertEqual(
         'A test\nA two\nline test\n%sbuffer hello' % tcli.SLASH,
         self.tcli_obj.buffers.GetBuffer('hello'))
@@ -974,10 +971,10 @@ class UnitTestTCLI(unittest.TestCase):
     self.tcli_obj.log = self.tcli_obj.logall = ''
 
     # Record command and escape commands with logstop.
-    self.tcli_obj.TildeCmd('recordall hello')
-    self.tcli_obj.TildeCmd('logall world')
+    self.tcli_obj.TCLICmd('recordall hello')
+    self.tcli_obj.TCLICmd('logall world')
     self.tcli_obj.ParseCommands('A test')
-    self.tcli_obj.TildeCmd('logstop hello')
+    self.tcli_obj.TCLICmd('logstop hello')
     self.assertIsNone(self.tcli_obj.recordall)
     self.tcli_obj.ParseCommands('A two\nline test')
     self.assertEqual(
@@ -993,15 +990,15 @@ class UnitTestTCLI(unittest.TestCase):
 
     # Record to buffer already in use
     self.tcli_obj.logall = 'hello'
-    self.tcli_obj.TildeCmd('record hello')
+    self.tcli_obj.TCLICmd('record hello')
     self.assertEqual(self.tcli_obj.record, '')
-    self.tcli_obj.TildeCmd('recordall hello')
+    self.tcli_obj.TCLICmd('recordall hello')
     self.assertEqual(self.tcli_obj.recordall, '')
-    self.tcli_obj.TildeCmd('log hello')
+    self.tcli_obj.TCLICmd('log hello')
     self.assertEqual(self.tcli_obj.log, '')
     self.tcli_obj.logall = ''
     self.tcli_obj.record = 'hello'
-    self.tcli_obj.TildeCmd('logall hello')
+    self.tcli_obj.TCLICmd('logall hello')
     self.assertEqual(self.tcli_obj.logall, '')
 
   def testTildeBufferLog(self):
@@ -1012,12 +1009,12 @@ class UnitTestTCLI(unittest.TestCase):
 
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
       # Record commands but not escape commands.
-      self.tcli_obj.TildeCmd('log hello')
+      self.tcli_obj.TCLICmd('log hello')
       self.tcli_obj.ParseCommands('A test')
       self.tcli_obj.ParseCommands('A two\nline test')
-      self.tcli_obj.TildeCmd('an invalid escape cmd')
+      self.tcli_obj.TCLICmd('an invalid escape cmd')
       # A valid SLASH command.
-      self.tcli_obj.TildeCmd('color')
+      self.tcli_obj.TCLICmd('color')
       self.assertEqual(
           'A test\nA two\nline test',
           self.tcli_obj.buffers.GetBuffer('hello'))
@@ -1030,12 +1027,12 @@ class UnitTestTCLI(unittest.TestCase):
     self.tcli_obj.log = None
 
     # Record both commands and escape commands.
-    self.tcli_obj.TildeCmd('logall hello')
+    self.tcli_obj.TCLICmd('logall hello')
     self.tcli_obj.ParseCommands('A test')
     self.tcli_obj.ParseCommands('A two\nline test')
     # exit, quit & help are not logged
-    self.tcli_obj.TildeCmd('help')
-    self.tcli_obj.TildeCmd('color')
+    self.tcli_obj.TCLICmd('help')
+    self.tcli_obj.TCLICmd('color')
     self.assertEqual(
         'A test\nA two\nline test\n%scolor' % tcli.SLASH,
         self.tcli_obj.buffers.GetBuffer('hello'))
@@ -1045,86 +1042,53 @@ class UnitTestTCLI(unittest.TestCase):
 
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
       self.tcli_obj.logall = 'hello'
-      self.tcli_obj.TildeCmd('logall')
+      self.tcli_obj.TCLICmd('logall')
       mock_print.assert_called_once_with("'logall' buffer is 'hello'",
                                         msgtype='system')
 
   def testTildeTimeout(self):
     """Tests setting the timeout value."""
 
-    self.tcli_obj.TildeCmd('timeout 10')
+    self.tcli_obj.TCLICmd('timeout 10')
     self.assertEqual(10, self.tcli_obj.timeout)
 
     # Rejects invalid data
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
-      self.tcli_obj.TildeCmd('timeout a')
+      self.tcli_obj.TCLICmd('timeout a')
       self.assertEqual(10, self.tcli_obj.timeout)
       mock_print.assert_called_once_with("Invalid timeout value 'a'.",
                                            msgtype='warning')
 
     # Accepts only positive whole integers
-    self.tcli_obj.TildeCmd('timeout 15.1')
+    self.tcli_obj.TCLICmd('timeout 15.1')
     self.assertEqual(10, self.tcli_obj.timeout)
-    self.tcli_obj.TildeCmd('timeout -15')
+    self.tcli_obj.TCLICmd('timeout -15')
     self.assertEqual(10, self.tcli_obj.timeout)
-
-  def testCmdDefaults(self):
-    """Tests setting commands back to default."""
-
-    self.tcli_obj.color_scheme = 'cstring'
-    self.tcli_obj.display = 'dstring'
-    self.tcli_obj.mode = 'estring'
-
-    # Sanity check defaults.
-    assert (
-        not tcli.FLAGS.interactive and
-        tcli.FLAGS.cmds is None and
-        tcli.FLAGS.display == 'raw' and
-        tcli.FLAGS.filter is None)
-
-    # Check that reseting 'display', resets this (and only this) variable.
-    self.tcli_obj._CmdDefaults('defaults', ['display'])
-    self.assertEqual('estring', self.tcli_obj.mode)
-
-    self.tcli_obj.display = 'dstring'
-    # Check that reseting 'mode', resets this (and only this) variable.
-    self.tcli_obj._CmdDefaults('defaults', ['mode'])
-    self.assertEqual('cli', self.tcli_obj.mode)
-    self.assertEqual('dstring', self.tcli_obj.display)
-
-    self.tcli_obj.mode = 'estring'
-    # Reset all values.
-    self.tcli_obj._CmdDefaults('defaults', ['all'])
-    self.assertEqual(tcli.FLAGS.display, self.tcli_obj.display)
-    self.assertEqual(tcli.FLAGS.mode, self.tcli_obj.mode)
-    # Raise exception for invalid value.
-    self.assertRaises(
-        ValueError, self.tcli_obj._CmdDefaults, 'defaults', ['allall'])
 
   def testTildeBufferPlay(self):
     """Tests that buffer contents 'plays' out as commands."""
 
     with mock.patch.object(self.tcli_obj, 'ParseCommands') as mock_parse:
       self.tcli_obj.buffers.Append('boo', 'hello\nworld')
-      self.tcli_obj.TildeCmd('play boo')
+      self.tcli_obj.TCLICmd('play boo')
       mock_parse.assert_called_once_with('hello\nworld')
 
       # Non existing buffer so ParseCommand is still only called once..
-      self.tcli_obj.TildeCmd('play non_exist')
+      self.tcli_obj.TCLICmd('play non_exist')
       mock_parse.assert_called_once_with('hello\nworld')
 
   def testTildeBufferRecursivePlay0(self):
     """Sanity check that buffer plays out."""
     with mock.patch.object(self.tcli_obj, 'ParseCommands') as mock_parse:
       self.tcli_obj.buffers.Append('boo', '%scolor' % tcli.SLASH)
-      self.tcli_obj.TildeCmd('play boo')
+      self.tcli_obj.TCLICmd('play boo')
       mock_parse.assert_called_once_with('%scolor' % tcli.SLASH)
 
   def testTildeBufferRecursivePlay1(self):
     """Cannot make recursive or infinite calls to play out buffer."""
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
       self.tcli_obj.buffers.Append('boo', '%splay boo' % tcli.SLASH)
-      self.tcli_obj.TildeCmd('play boo')
+      self.tcli_obj.TCLICmd('play boo')
       mock_print.assert_called_once_with(
           'Recursive call of "play" rejected.', msgtype='warning')
 
@@ -1133,9 +1097,9 @@ class UnitTestTCLI(unittest.TestCase):
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
       self.tcli_obj.buffers.Append('boo', '%srecordall boo\n%scolor' % (
           tcli.SLASH, tcli.SLASH))
-      self.tcli_obj.TildeCmd('play boo')
+      self.tcli_obj.TCLICmd('play boo')
       mock_print.assert_called_once_with(
-          "Buffer: boo, already open by 'play' command.", msgtype='warning')
+          "Buffer: 'boo', already open by 'play' command.", msgtype='warning')
       self.assertEqual(self.tcli_obj.recordall, '')
 
   def testTildeBufferRecursivePlay3(self):
@@ -1143,7 +1107,7 @@ class UnitTestTCLI(unittest.TestCase):
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
       self.tcli_obj.recordall = 'boo'
       self.tcli_obj.buffers.Append('boo', '%scolor' % tcli.SLASH)
-      self.tcli_obj.TildeCmd('play boo')
+      self.tcli_obj.TCLICmd('play boo')
       mock_print.assert_called_once_with(
           "Buffer: 'boo', already open for writing.", msgtype='warning')
 
@@ -1153,7 +1117,7 @@ class UnitTestTCLI(unittest.TestCase):
       self.tcli_obj.color = True
       self.tcli_obj.recordall = 'hoo'
       self.tcli_obj.buffers.Append('boo', '%scolor' % tcli.SLASH)
-      self.tcli_obj.TildeCmd('play boo')
+      self.tcli_obj.TCLICmd('play boo')
       self.assertEqual('%splay boo\n%scolor' % (tcli.SLASH, tcli.SLASH),
                        self.tcli_obj.buffers.GetBuffer('hoo'))
       # Color value was toggled.
@@ -1164,7 +1128,7 @@ class UnitTestTCLI(unittest.TestCase):
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
       # Populate and test that content is returned.
       self.tcli_obj.buffers.Append('boo', 'hello\nworld')
-      self.tcli_obj.TildeCmd('buffer boo')
+      self.tcli_obj.TCLICmd('buffer boo')
 
       mock_print.assert_has_calls([
         mock.call('#! BUFFER boo !#', msgtype='warning'),
@@ -1173,7 +1137,7 @@ class UnitTestTCLI(unittest.TestCase):
 
       # Invalid buffer name displays null content.
       mock_print.reset_mock()
-      self.tcli_obj.TildeCmd('buffer non_exist')
+      self.tcli_obj.TCLICmd('buffer non_exist')
       mock_print.assert_called_once_with('Invalid buffer name "non_exist".',
                                          msgtype='warning')
 
@@ -1181,11 +1145,11 @@ class UnitTestTCLI(unittest.TestCase):
     """Tests that buffer contents are cleared."""
 
     self.tcli_obj.buffers.Append('boo', 'hello\nworld')
-    self.tcli_obj.TildeCmd('clear boo')
+    self.tcli_obj.TCLICmd('clear boo')
     self.assertRaises(AttributeError, self.tcli_obj.buffers.GetBuffer, 'boo')
 
     # Clearing a nonexistant buffer fails silently.
-    self.tcli_obj.TildeCmd('clear non_exist')
+    self.tcli_obj.TCLICmd('clear non_exist')
 
 
   def testTildeExpandTargets(self):
@@ -1193,7 +1157,7 @@ class UnitTestTCLI(unittest.TestCase):
 
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
       self.tcli_obj.inventory.device_list = ['device_a', 'device_b']
-      self.tcli_obj.TildeCmd('expandtargets')
+      self.tcli_obj.TCLICmd('expandtargets')
       mock_print.assert_called_once_with('device_a,device_b', msgtype='system')
 
   def testAdvancedRegexpTargets(self):
