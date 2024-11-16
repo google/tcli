@@ -669,11 +669,11 @@ class UnitTestTCLI(unittest.TestCase):
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
       self.tcli_obj.TCLICmd('help badarg')
       mock_print.assert_called_once_with(
-          'Invalid number of arguments, found "1".', msgtype='warning')
+          'Invalid number of arguments, found: 1.', msgtype='warning')
 
       self.tcli_obj.TCLICmd('buffer boo badarg')
       mock_print.assert_called_with(
-          'Invalid number of arguments, found "2".', msgtype='warning')
+          'Invalid number of arguments, found: 2.', msgtype='warning')
 
   def testTildeExit(self):
 
