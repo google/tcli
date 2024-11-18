@@ -18,7 +18,8 @@ TCLI groups commands by device name or device attributes, sends and receives com
 asyncronously and tabulates them into a table for a unified view of the cross section of the device
 fleet that you are interested in.
 
-Useful for real time analysis, interactive or exploratory troubleshooting, and creating holistic views of device state or configuration for the cross section of the fleet you are interested in.
+Useful for real time analysis, interactive or exploratory troubleshooting, and creating holistic views
+of device state or configuration for the cross section of the fleet you are interested in.
 
 Can be used against a live network, for real-time data, or against a repository of stored command
 outputs for offline use with near-realtime data.
@@ -46,7 +47,7 @@ components needed for a complete solution.
 graph LR
     style TCLI fill:#eee,color:#333
     TCLI@{shape: rounded}
-    A@{shape: manual-input, label: fa:fa-user}
+    A@{shape: manual-input, label: fa:fa-user User}
     B@{shape: cyl, label: "Device\nInventory"}
     C@{shape: proc, label: Authenticator}
     D@{shape: procs, label: Accessor}
@@ -60,21 +61,23 @@ graph LR
     E --- F
 ```
 
-1. [TextFSM](https://github.com/google/textfsm/wiki/Code-Lab) for formatting raw
+* [**TextFSM**](https://github.com/google/textfsm/wiki/Code-Lab) for formatting raw
 CLI output into structured tables
-1. [NTC templates](https://github.com/networktocode/ntc-templates) for TextFSM
+* [**NTC Templates**](https://github.com/networktocode/ntc-templates) for TextFSM
 to be able to structure output for specific commands and families of devices.
-1. Accessor: A service to send and receive commands to/from devices.
+* **Accessor**: A service to send and receive commands to/from devices.
 Examples include:
     * [Notch](https://pypi.org/project/notch.agent/)
     * [Rancid](https://pypi.org/project/rancidcmd/)
     * [Salt](https://docs.saltproject.io/en/latest/contents.html)
     * [Scrapli](https://carlmontanari.github.io/scrapli/)
     * [Netmiko](https://pypi.org/project/netmiko/)
-1. Inventory: A database, DNS or CVS file of device names and attributes, or the data file
+* **Inventory**: A database, DNS or CVS file of device names and attributes, or the data file
 from the accessor library above, such as router.db from RANCID.
-1. Authenticator: Most of the accessors systems above seem to skip this step ...
-It's recommended practice to authenticate access and authorise what commands can be sent to a device. For example a reasonable policy is to allow only NOC personnel call the CLI and to only allow ```show ...``` commands that do not make changes to device state.<BR>
+* **Authenticator**: Most of the accessors systems above seem to skip this step ...
+It's recommended practice to authenticate access and authorise what commands can be sent to a device.
+For example a reasonable policy is to allow only NOC personnel call the CLI and to only allow
+```show ...``` commands that do not make changes to device state.<BR>
 This policy and its implementation will vary greatly between organisations and unfortunately
 you'll need to 'roll your own' here.
 
@@ -100,7 +103,8 @@ Once setup for your environment, the Power Users guide will get you up and runni
 
 ## Setup
 
-To use in your environment TCLI needs to be configured to retrieve a list of devices from whatever system is used to manage inventory. And integrated to call your device accessor system
+To use in your environment TCLI needs to be configured to retrieve a list of devices from whatever system
+is used to manage inventory. And integrated to call your device accessor system
 (or to scrape the output files that it produces).
 
 Your site customisations are made to a new file that implements a child class of ```Inventory```.
@@ -108,9 +112,11 @@ This class is declared in ```inventory.py```. so import, inherit, and override t
 [methods](https://github.com/search?q=repo%3Aharro%2Ftcli+NotImplementedError&type=code)
 ```_FetchDevices``` and ```SendRequests``` of the parent ```Inventory``` class in your file.
 
-A "canned" example is included [```inventory_csv.py```](https://github.com/harro/tcli/blob/master/tcli/inventory_csv.py) for illustration.
+A "canned" example is included
+[```inventory_csv.py```](https://github.com/harro/tcli/blob/master/tcli/inventory_csv.py) for illustration.
 
-Your substitute module is imported by ```tcli_lib.py``` and a single line for importing needs updating [there](https://github.com/search?q=repo%3Aharro%2Ftcli+CHANGEME+tcli_lib.py&type=code)
+Your substitute module is imported by ```tcli_lib.py``` and a single line for importing needs updating
+[there](https://github.com/search?q=repo%3Aharro%2Ftcli+CHANGEME+tcli_lib.py&type=code)
 to point at your new inventory module instead.
 
 Contributors are welcome to add various ```inventory_<accessor>.py``` files for popular open source
