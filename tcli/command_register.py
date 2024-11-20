@@ -26,10 +26,10 @@ flags.DEFINE_enum(
     Available display formats are: {DISPLAY_FORMATS}
     Shortname: 'D'.""", short_name='D')
 
-flags.DEFINE_enum(
-  'filter', 'default_index', ['default_index', ''], """
-    File name that maps templates for extracting data from output.
-    Is disabled if display is in 'raw' mode.
+flags.DEFINE_string(
+  'filter', 'default_index', """
+    Name of index file that contains the map of command output to TextFSM
+    templates. For extracting relevant data from command output for display.
     Shortname: 'F'.""", short_name='F')
 
 flags.DEFINE_boolean(
@@ -46,7 +46,6 @@ flags.DEFINE_integer(
   f'{I}Period (in seconds) to wait for outstanding command responses.',
   short_name='O')
 
-flags.DEFINE_boolean('sorted', False, f'{I}Sort device entries in output.')
 
 def RegisterCommands(
     command_object, cli_parser:command_parser.CommandParser) -> None:
@@ -113,7 +112,7 @@ def RegisterCommands(
   cli_parser.RegisterCommand(
     'exec', f"""
     Execute command in shell.
-    {I}Shortname: '!'.""", short_name='!', min_args=1, raw_arg=True,
+    Shortname: '!'.""", short_name='!', min_args=1, raw_arg=True,
     handler=command_object._CmdExecShell)
   
   cli_parser.RegisterCommand(

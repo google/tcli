@@ -180,15 +180,21 @@ class Inventory(object):
     # We always have "targets", which is matched against the device name.
     self._inclusions: dict[str, str] = {'targets': ''}
     self._exclusions: dict[str, str] = {'xtargets': ''}
+    self._attributes: dict[str, Attribute] = {}
     # Filters and exclusions added by this library.
     logging.debug(
-      f'Device attributes statically defined: "{DEVICE_ATTRIBUTES}".')
+      f'Device attributes globally defined: "{DEVICE_ATTRIBUTES}".')
     #TODO(harro): Compare against reserved words and raise exception if a dup.
     for attr in DEVICE_ATTRIBUTES:
       # TODO(harro): Add support for filtering on flag values.
       if attr == 'flags': continue
       self._inclusions[attr] = ''
       self._exclusions['x' + attr] = ''
+      self._attributes[attr] = DEVICE_ATTRIBUTES[attr]
+
+  @property
+  def attributes(self) -> dict[str, Attribute]:
+    return self._attributes.copy()
 
   @property
   def devices(self) -> dict[str, typing.NamedTuple]:
@@ -280,7 +286,7 @@ class Inventory(object):
       handler=self._AttributeFilter, completer=self._CmdFilterCompleter)
 
     # Register commands specific to this inventory source.
-    for attribute in DEVICE_ATTRIBUTES.values():
+    for attribute in self._attributes.values():
       if attribute.name in FLAGS:
         default_value = getattr(FLAGS, attribute.name)
       else:
@@ -363,7 +369,7 @@ class Inventory(object):
     if word == ' ':
       word = ''
     completer_list = []
-    for attrib in DEVICE_ATTRIBUTES:
+    for attrib in self._attributes:
       if attrib.startswith(word):
         completer_list.append(attrib)
     completer_list.sort()
@@ -518,16 +524,16 @@ class Inventory(object):
     if not literals: return True
 
     attribute = filter_name
-    # Trim off the 'x' prefix for matching exclusions against attributes.
+    # Trim off the 'x' prefix for attribute name.
     if filter_name.startswith('x'):
       attribute = filter_name[1 :]
 
     if attribute == 'targets':
       # Warn user if literal is unknown.
       validate_list = self.devices
-    elif (attribute in DEVICE_ATTRIBUTES and
-          DEVICE_ATTRIBUTES[attribute].valid_values):
-      validate_list = DEVICE_ATTRIBUTES[attribute].valid_values
+    elif (attribute in self._attributes and
+          self._attributes[attribute].valid_values):
+      validate_list = self._attributes[attribute].valid_values
     else:
       # Without a specific list of valid values, check that at least one
       # device matches.

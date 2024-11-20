@@ -131,14 +131,6 @@ DEFAULT_CONFIGFILE = os.path.join(os.path.expanduser('~'), '.tclirc')
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string(
-  'cmds', None, """
-    Commands (newline separated) to send to devices in the target list.
-    'Prompting' commands, commands that request further input from the
-    user before completing are discouraged and will fail.
-
-    Examples to avoid: telnet, ping, reload.""", short_name='C')
-
-flags.DEFINE_string(
   'config_file', DEFAULT_CONFIGFILE, """
     Configuration file to read. Lines in this file will be read into '
     buffer "startup" and played.'
@@ -148,10 +140,7 @@ flags.DEFINE_boolean(
   'dry_run', False,
   f'{I}Display commands and targets, without submitting commands.')
 
-flags.DEFINE_boolean(
-  'interactive', False,
-  f'{I}tcli runs in interactive mode. This is the default mode if no'
-  ' cmds are supplied.\n', short_name='I')
+flags.DEFINE_boolean('sorted', False, f'{I}Sort device entries in output.')
 
 flags.DEFINE_string(
   'template_dir', os.path.join(os.path.dirname(__file__), 'testdata'),
@@ -389,39 +378,53 @@ class TCLI(object):
   def Completer(self, word:str, state:int) -> str|None:
     """Command line completion used by readline library."""
 
+    # The readline completer is not stateful. So we read the full line and pass
+    # that to the respective completer functions.
+
     # Silently discard leading whitespace on cli.
-    full_line = readline.get_line_buffer().lstrip() # type: ignore
+    full_line = readline.get_line_buffer().lstrip()                             # type: ignore
+
     if full_line and full_line.startswith(SLASH):
-      return self._TildeCompleter(full_line, state)
+      # Drop the slash before passing the command.
+      return self._TildeCompleter(full_line[1:], state)
+
+    # If not a TCLI command, or an empty prompt, then return completions for 
+    # known remote device commands that we support with TextFSM.
     return self._CmdCompleter(full_line, state)
 
   def _TildeCompleter(self, full_line:str, state:int) -> str|None:
     """Command line completion for escape commands."""
 
-    # Pass subsequent arguments of a command to its completer.
+    completer_list = []
+    # We have a complete TCLI command.
+    # Ignore get_completer_delims, we only use spaces as separators.
     if ' ' in full_line:
-      cmd = full_line[1:full_line.index(' ')]
-      arg_string = full_line[full_line.index(' ') + 1 :]
-      completer_list = []
-      cmd_obj = self.cli_parser.GetCommand(cmd)
-      if cmd_obj:
-        for arg_options in cmd_obj.completer():
-          if arg_options.startswith(arg_string):
-            completer_list.append(arg_options)
+      word_sep = full_line.index(' ')         # Word boundary.
+      (cmd_name, arg_string) = (full_line[:word_sep], full_line[word_sep +1:])
+
+      # If we have a shortname, expand it before continuing.
+      if len(cmd_name) == 1:
+        for cname in self.cli_parser:
+          if self.cli_parser[cname].short_name is cmd_name:
+            cmd_name = cname
+
+      # Compare the subsequent arguments with the specific command completer.
+      if cmd_name in self.cli_parser:
+        for arg_option in self.cli_parser[cmd_name].completer():
+          if arg_option.startswith(arg_string):
+            completer_list.append(arg_option)
 
       if state < len(completer_list):
         return completer_list[state]
       return None
 
-    # First word, a TCLI command word.
-    completer_list = []
-    for cmd in self.cli_parser:
-      # Strip TILDE and compare.
-      if cmd.startswith(full_line[1 :]):
-        completer_list.append(cmd)
-        cmd_obj = self.cli_parser.GetCommand(cmd)
-        if cmd_obj and cmd_obj.append:
-          completer_list.append(cmd + command_parser.APPEND)
+    # Partial, or whole command word with no arguments.
+    for cmd_name in self.cli_parser:
+      if cmd_name.startswith(full_line):
+        completer_list.append(cmd_name)
+        if (cmd_name in self.cli_parser and self.cli_parser[cmd_name].append):
+          # Add the apend option of the command to the list
+          completer_list.append(cmd_name + command_parser.APPEND)
     completer_list.sort()
 
     if state < len(completer_list):
@@ -438,7 +441,6 @@ class TCLI(object):
       current_word = ''
       line_tokens = []
       word_boundary = False
-      self._completer_list = []
       # What has been typed so far.
 
       # Collapse quotes to remove any whitespace within.
@@ -447,12 +449,12 @@ class TCLI(object):
       # Remove double spaces etc
       cleaned_line = re.sub(r'\s+', ' ', cleaned_line)
 
-      # Are we part way through typing a word or not.
+      # Are we part way through typing a word.
       if cleaned_line and cleaned_line.endswith(' '):
         word_boundary = True
 
       cleaned_line = cleaned_line.rstrip()
-      # If blank line then this is also a word boundary.
+      # If a blank line then this is also a word boundary.
       if not cleaned_line:
         word_boundary = True
       else:
@@ -464,7 +466,7 @@ class TCLI(object):
 
       # Compare with table of possible commands
       if self.filter_engine:
-        for row in self.filter_engine.index.index:
+        for row in self.filter_engine.index.index:                              # type: ignore
           # Split the regexp into tokens, re combine only as many as there are
           # in the line entered so far.
           cmd_tokens = row['Command'].split(' ')
@@ -612,11 +614,7 @@ class TCLI(object):
         requests.append(req)
 
     # Submit command request to inventory manager for each host.
-    try:
-      requests_callbacks = [(req, self.Callback) for req in requests]
-    except AttributeError as error_message:
-      logging.error('Submitting the requests caused an AttributeError: %s.',
-                    error_message)
+    requests_callbacks = [(req, self.Callback) for req in requests]
     # Setup progress indicator.
     self.cmd_response.StartIndicator()
     self.inventory.SendRequests(requests_callbacks, deadline=self.timeout)
@@ -717,8 +715,7 @@ class TCLI(object):
                      'Hostname': response.device_name}
 
       device = self.devices[response.device_name]
-      # TODO(harro): Referencing DEVICE_ATTRIBUTES directly should be avoided.
-      for attr in inventory.DEVICE_ATTRIBUTES:
+      for attr in self.inventory.attributes:
 
         # Some attributes are a list rather than a string, such as flags.
         # These are not supported by Clitable attribute matching
@@ -729,9 +726,9 @@ class TCLI(object):
 
         # The filter index uses capitilised first letter for column names.
         # For some values we capitilise part of the value.
-        if inventory.DEVICE_ATTRIBUTES[attr].display_case == 'title':
+        if self.inventory.attributes[attr].display_case == 'title':
           filter_attr[attr.title()] = getattr(device, attr).title()
-        elif inventory.DEVICE_ATTRIBUTES[attr].display_case == 'upper':
+        elif self.inventory.attributes[attr].display_case == 'upper':
           filter_attr[attr.title()] = getattr(device, attr).upper()
         else:
           filter_attr[attr.title()] = getattr(device, attr)
@@ -958,6 +955,7 @@ class TCLI(object):
   def _CmdEnv(self, command:str, args:list[str], append:bool) -> str:
     """Display various environment variables."""
 
+    inventory_str = ''
     if self.inventory:
       inventory_str = self.inventory.ShowEnv()
 
@@ -1030,16 +1028,13 @@ class TCLI(object):
 
     result: list[str] = []
     # Print the brief comment regarding escape commands.
-    for cmd in sorted(self.cli_parser):
-      cmd_obj: typing.Any|None = self.cli_parser.GetCommand(cmd)
-      if not cmd_obj: continue
+    for cmd_name in sorted(self.cli_parser):
+      cmd_obj = self.cli_parser[cmd_name]
       append_str = '[+]' if cmd_obj.append else ''
-      arg = ''
-      if cmd_obj.min_args:
-        arg = f' <{cmd}>'
+      arg = f' <{cmd_name}>' if cmd_obj.min_args else ''
       result.append(
-        f'{cmd}{append_str}{arg}{cmd_obj.help_str}\n\n')
-    return ''.join(result)
+        f'{cmd_name}{append_str}{arg} {cmd_obj.help_str}')
+    return '\n\n'.join(result)
 
   def _CmdInventory(self, command:str, args:list[str], append:bool) -> str:
     """Displays devices in target list."""
@@ -1048,8 +1043,7 @@ class TCLI(object):
     for device_name in self.device_list:
       device = self.devices[device_name]
       attr_list = [device_name]
-      # TODO(harro): Shouldn't need to call DEVICE_ATTRIBUTES directly.
-      for name in inventory.DEVICE_ATTRIBUTES:
+      for name in self.inventory.attributes:
         if name == 'flags': continue
         if not getattr(device, name): continue
         attr_list.append(f'{name.title()}:{str(getattr(device, name)) or ''}')

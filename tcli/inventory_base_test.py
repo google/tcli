@@ -113,15 +113,14 @@ class InventoryBaseTest(unittest.TestCase):
     """Test command completion list for valid attribute completions."""
 
     # Completer matches against the global device attributes.
-    inventory_base.DEVICE_ATTRIBUTES = ['apple', 'pear']
+    self.inv._attributes = {'apple': {},
+                             'pear': {}}
     # A blank word will match all entries, state 0 and state 1.
-    self.assertEqual(self.inv._CmdFilterCompleter([''], 0),
-                     inventory_base.DEVICE_ATTRIBUTES[0])
-    self.assertEqual(self.inv._CmdFilterCompleter([''], 1),
-                     inventory_base.DEVICE_ATTRIBUTES[1])
+    self.assertEqual(self.inv._CmdFilterCompleter([''], 0), 'apple')
+    self.assertEqual(self.inv._CmdFilterCompleter([''], 1), 'pear')
     # An empty word list gives a 'None' result.
     self.assertEqual(
-      self.inv._CmdFilterCompleter([''], len(inventory_base.DEVICE_ATTRIBUTES)),
+      self.inv._CmdFilterCompleter([''], len(self.inv._attributes)),
       None)
     # Valid single match.
     self.assertEqual(self.inv._CmdFilterCompleter(['p'], 0), 'pear')

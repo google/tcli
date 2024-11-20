@@ -1,6 +1,6 @@
 # TCLI – TextFSM Device CLI
 
-> Forked from https://github.com/google/tcli - as that repo is now read-only.
+> Forked from https://github.com/google/tcli - as that repo is archived.
 > 
 > TCLI was a starter project at Google back in 2008. Although a powerful tool for network
 > troubleshooting, and popular within Google for over a decade, it is accidental code lacking in
@@ -13,10 +13,10 @@ TCLI is a client interface for issuing commands to arbitrarily large numbers of 
 (hundreds, thousands, even hundreds of thousands). It supports a rich set of interactive functions
 and can collate responses into various tabular display formats.
 
-An essential tool for scaling administration of networks when device access is required via CLI.
-TCLI groups commands by device name or device attributes, sends and receives command outputs
-asyncronously and tabulates them into a table for a unified view of the cross section of the device
-fleet that you are interested in.
+An essential tool for scaling network administration when device access is required via CLI.
+The cross section of devices to receive commands is controlled by matching on device names or
+other attributes. The commands are sent and received asyncronously and the outputs are collated
+into tables for a unified view.
 
 Useful for real time analysis, interactive or exploratory troubleshooting, and creating holistic views
 of device state or configuration for the cross section of the fleet you are interested in.
@@ -25,7 +25,7 @@ Can be used against a live network, for real-time data, or against a repository 
 outputs for offline use with near-realtime data.
 
 See the [TCLI Power Users Guide](https://github.com/harro/tcli/wiki/TCLI-Power-Users-Guide) for how 
-to make use of the CLI functionality.
+to make use of the interactive CLI functionality.
 
 ## Cautions and Caveats
 
@@ -74,12 +74,12 @@ Examples include:
     * [Netmiko](https://pypi.org/project/netmiko/)
 * **Inventory**: A database, DNS or CVS file of device names and attributes, or the data file
 from the accessor library above, such as router.db from RANCID.
-* **Authenticator**: Most of the accessors systems above seem to skip this step ...
-It's recommended practice to authenticate access and authorise what commands can be sent to a device.
-For example a reasonable policy is to allow only NOC personnel call the CLI and to only allow
-```show ...``` commands that do not make changes to device state.<BR>
+* **Authenticator**: Authentication and authorisation policies for what commands can be sent
+to devices.<BR>
+An AAA policy might allow NOC personnel to use the CLI but then only permit _'show'_
+commands so that changes cannot be made to the devices.<BR>
 This policy and its implementation will vary greatly between organisations and unfortunately
-you'll need to 'roll your own' here.
+you'll need to _'roll your own'_ here.
 
 ## Getting Started
 

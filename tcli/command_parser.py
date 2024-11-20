@@ -339,10 +339,6 @@ class CommandParser(dict):
 
     return (lhs_str.strip(), ''.join(new_token_list).strip())
 
-  def GetCommand(self, command_name:str) -> _Command|None:
-    """Returns object for a command, None otherwise."""
-    return self.get(command_name)
-
   def GetDefault(self, command_name:str) -> typing.Any:
     """Returns default value for a command.
 

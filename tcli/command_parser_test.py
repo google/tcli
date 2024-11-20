@@ -29,7 +29,7 @@ class CommandParserTest(unittest.TestCase):
 
     # Lots of defaults.
     self.cmd_parser.RegisterCommand('boo', 'A help string.', short_name='B')
-    boo = self.cmd_parser.GetCommand('boo')
+    boo = self.cmd_parser['boo']
     boo_dict = {
         'min_args': 0, 'max_args': 1, 'default_value': None, 'append': False,
         'inline': False, 'raw_arg': False, 'regexp': False, 'toggle': False,
@@ -40,7 +40,7 @@ class CommandParserTest(unittest.TestCase):
         'hoo', 'A help string.', short_name='H', min_args=1,
         max_args=2, default_value=10, append=True,
         inline=True, raw_arg=True, regexp=True, toggle=True)
-    hoo = self.cmd_parser.GetCommand('hoo')
+    hoo = self.cmd_parser['hoo']
     hoo_dict = {
         'min_args': 1, 'max_args': 2, 'default_value': 10, 'append': True,
         'inline': True, 'raw_arg': True, 'regexp': True, 'toggle': True,
@@ -186,9 +186,9 @@ class CommandParserTest(unittest.TestCase):
     self.cmd_parser.RegisterCommand('b', '')
     self.cmd_parser.RegisterCommand('c', '', inline=True)
     self.cmd_parser.InlineOnly()
-    self.assertTrue(self.cmd_parser.GetCommand('a'))
-    self.assertFalse(self.cmd_parser.GetCommand('b'))
-    self.assertTrue(self.cmd_parser.GetCommand('c'))
+    self.assertTrue('a' in self.cmd_parser)
+    self.assertFalse('b' in self.cmd_parser)
+    self.assertTrue('c' in self.cmd_parser)
 
   def testParseCommandLine1(self):
     """Tests parsing a command with default arguments."""

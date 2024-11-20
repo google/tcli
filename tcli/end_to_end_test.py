@@ -53,10 +53,8 @@ class UnitTestTCLIEndToEnd(unittest.TestCase):
   def setUp(self):
     super(UnitTestTCLIEndToEnd, self).setUp()
     tcli.FLAGS.color = False
-    tcli.FLAGS.interactive = False
     tcli.FLAGS.display = 'csv'
     tcli.FLAGS.sorted = True
-    tcli.FLAGS.cmds = None
     tcli.FLAGS.template_dir = os.path.join(
         os.path.dirname(__file__), 'testdata')
     # Read some runtime commands from there.
