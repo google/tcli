@@ -18,12 +18,11 @@
 """
 
 import threading
+
 import tqdm
 from absl import logging
-from tcli import inventory_base as inventory
-from typing import Callable
 
-PROGRESS_MESSAGE = '#! Receiving:'
+from tcli import inventory_base as inventory
 
 
 class CmdResponse(object):
@@ -60,7 +59,7 @@ class CmdResponse(object):
 
     def Wrapper(main_obj, *args, **kwargs):
       with main_obj._lock:          # pylint: disable=protected-access
-        return func(main_obj, *args, **kwargs)  # type: ignore
+        return func(main_obj, *args, **kwargs)                                  # type: ignore
     return Wrapper
 
   @Synchronized # type: ignore
@@ -79,7 +78,7 @@ class CmdResponse(object):
     self._progressbar = None
 
   @Synchronized # type: ignore
-  def SetCommandRow(self, command_row:int, pipe:str) -> None:
+  def InitCommandRow(self, command_row: int, pipe: str) -> None:
     """Initialise data for a new row, each row corresponds to a command.
 
     Args:
@@ -93,7 +92,7 @@ class CmdResponse(object):
     self._pipe[command_row] = pipe
 
   @Synchronized # type: ignore
-  def SetRequest(self, command_row:int, request_uid:int) -> None:
+  def SetRequest(self, command_row: int, request_uid: int) -> None:
     """Maps uid returned by inventory class to a row number and result.
 
     Args:
@@ -106,7 +105,7 @@ class CmdResponse(object):
     self._row_index[command_row].append(request_uid)
 
   @Synchronized # type: ignore
-  def AddResponse(self, response:inventory.CmdResponse) -> bool:
+  def AddResponse(self, response: inventory.Response) -> bool:
     """Add response to results table.
 
     Args:
@@ -139,54 +138,50 @@ class CmdResponse(object):
     return True
 
   @Synchronized # type: ignore
-  def GetRow(self) -> tuple[list[int], str]|None:
+  def GetRow(self) -> tuple[list[int], str]:
     """Return current row if fully populated with results.
 
     Returns:
       Tuple: List of responses of the row to display and a string of the
       commandline pipe to pass the responses through before displaying.
-      None: if the current row is not ready.
+      List is empty if the current row is not ready.
     """
 
-    if self._current_row not in self._row_response:
-      # Reading off the end of the rows, either we've just started a new row
-      # or we are off the bottom of the table and no more rows are needed.
-      logging.debug('GetRow: Current row not in responses.')
-      # Triggers the done flag if we already have all responses.
-      if len(self._results) == self._response_count:
-        logging.debug('GetRow: All results returned.')
-        self.done.set()
-      # Otherwise we are still waiting for our first responses for this row.
-      return
-
     # Have we received all responses for the current row.
-    if (len(self._row_response[self._current_row]) ==
+    if (self._current_row in self._row_response and
+        len(self._row_response[self._current_row]) ==
         len(self._row_index[self._current_row])):
-      logging.info('Row %s was complete (size %s) and returned.',
-                   self._current_row,
-                   len(self._row_response[self._current_row]))
+      logging.info(
+        'Row %s was complete (size %s) and returned.',
+        self._current_row, len(self._row_response[self._current_row]))
       # Assemble the results for the row and any corresponding pipe content.
-      result = (self._row_response[self._current_row],
-                self._pipe[self._current_row])
+      result = (
+        self._row_response[self._current_row], self._pipe[self._current_row])
       # Advance the current row.
       self._current_row += 1
       # Reset the progress indicator as there is results to display.
       if self._progressbar is not None:
         self._progressbar.close()
+      # return the row.
       return result
-    logging.debug('Current row incomplete.')
+    
+    # Have we returned the last row of results, if so then we are done?
+    if len(self._results) == self._response_count:
+      logging.debug('GetRow: All results returned.')
+      self.done.set()
+  
+    # Either still waiting on entries in current row, or we're done.
+    return ([], '')
 
-  def GetResponse(self, uid:int) -> inventory.CmdResponse|None:
+  def GetResponse(self, uid: int) -> inventory.Response|None:
     """Returns response object for a given uid."""
 
     try:
       return self._results[uid]
     except KeyError:
-      logging.error('Invalid UID: %s, possible values: %s.',
-                    uid, str(self._results))
+      logging.error(
+        'Invalid UID: %s, possible values: %s.', uid, str(self._results))
 
-  def StartIndicator(self, message:str=PROGRESS_MESSAGE) -> None:
+  def StartIndicator(self, message: str = '#! Receiving:') -> None:
     """Starts a progress indicator to indicate receiving of requests."""
-
-    # TODO(harro): Display textmessage at outset, or remove.
     self._progressbar = tqdm.tqdm(list(range(len(self._results))), desc=message)

@@ -36,8 +36,10 @@ server, which may be one of:
 import collections
 import os
 import typing
+
 from absl import flags
 from absl import logging
+
 from tcli import inventory_base
 from tcli.inventory_base import CmdRequest
 from tcli.inventory_base import AuthError       # pylint: disable=unused-import
@@ -52,9 +54,8 @@ from tcli.inventory_base import InventoryError  # pylint: disable=unused-import
 ## Note: Two values will be created for each attribute. The second will be
 ## prefixed with an 'x' to be used for inverse matching (exclusions).
 DEVICE_ATTRIBUTES = inventory_base.DEVICE_ATTRIBUTES
-#TODO(harro): Prevent this from being overridden by inventory_base.__init__
 DEVICE_ATTRIBUTES['pop'] = inventory_base.Attribute(
-    'pop', '', None,
+    'pop', '', [],
     '\n    Limit device lists to specific pop/s')
 DEVICE_ATTRIBUTES['realm'] = inventory_base.Attribute(
     'realm', 'lab', ['prod', 'lab'],
@@ -66,8 +67,6 @@ DEVICE_ATTRIBUTES['vendor'] = inventory_base.Attribute(
 # Set here if known.
 # In the case here this will be overwritten once the CSV content is known.
 DEVICE = inventory_base.DEVICE
-
-# TODO(harro): Handle the 'flags' attribute and filtering.
 
 ## CHANGEME
 ## To get up and running we use test data. Replace this path with the location
@@ -91,11 +90,11 @@ flags.DEFINE_string(
     'inventory', DEFAULT_CSV_FILE,
     'Location of file containing the CSV list of devices.')
 
-# TODO(harro): Support using a different string for separating flags.
+# TODO(#38): Support using a different string for separating flags.
 flags.DEFINE_string('separator', ', ',
                     'String sequence that separates entries in the CSV file.')
 
-CmdResponse = inventory_base.CmdResponse
+CmdResponse = inventory_base.Response
 
 class Inventory(inventory_base.Inventory):
   """CSV Inventory Class.
@@ -223,7 +222,7 @@ class Inventory(inventory_base.Inventory):
       except IOError:
         error = ('Failure to retrieve response from device "%s",'
                  ' for command "%s".' % (request.target, request.command))
-      response = inventory_base.CmdResponse(uid=request.uid,
+      response = inventory_base.Response(uid=request.uid,
                                             device_name=request.target,
                                             command=request.command,
                                             data=data,

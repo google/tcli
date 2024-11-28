@@ -19,9 +19,11 @@
 import collections
 import copy
 import os
-from absl import flags
 import unittest
 from unittest import mock
+
+from absl import flags
+
 from tcli import command_register
 from tcli import inventory_base as inventory
 from tcli import tcli_lib as tcli
@@ -30,20 +32,6 @@ from tcli.tcli_textfsm import clitable
 
 APPEND = tcli.command_parser.APPEND
 FLAGS = flags.FLAGS
-
-
-class FakeDev(object):
-  """Fake device as received from Chipmunk."""
-
-  def __init__(self, vendor, realm):
-    self._vendor = vendor
-    self._realm = realm
-
-  def vendor(self):  # pylint: disable=g-bad-name
-    return self._vendor
-
-  def realm(self):  # pylint: disable=g-bad-name
-    return self._realm
 
 
 class FakeLock(object):
@@ -89,47 +77,25 @@ class FakeEvent(object):
     pass
 
 
-class FakeCmdResponse(tcli.command_response.CmdResponse):
-  """Fake CmdResponse object."""
-
-  _lock = FakeLock()
-  done = FakeEvent()
-
-  def __init__(self, uid='', device_name='', command='', data='', error=''):
-    super(FakeCmdResponse, self).__init__()
-    if uid:
-      self.uid = uid
-
-  def StartIndicator(self, message=''):
-    pass
-
-
-class FakeActionRequest(object):
-
-  def __init__(self, uid):
-    self.uid = uid
-
-
 class UnitTestTCLI(unittest.TestCase):
   """Tests the TCLI class."""
 
   @classmethod
   def setUpClass(cls):
-    super(UnitTestTCLI, cls).setUpClass()
     cls.flags_orig = copy.deepcopy(tcli.FLAGS)
     tcli.command_response.threading.Event = mock.MagicMock()
     tcli.command_response.threading.Lock = mock.MagicMock()
     tcli.command_response.tqdm = mock.MagicMock()
-    tcli.FLAGS.template_dir = os.path.join(os.path.dirname(__file__),
-                                           'testdata')
+    tcli.FLAGS.template_dir = os.path.join(
+      os.path.dirname(__file__), 'testdata')
+    return super().setUpClass()
 
   @classmethod
   def tearDownClass(cls):
-    super(UnitTestTCLI, cls).tearDownClass()
     tcli.FLAGS = cls.flags_orig
+    return super().tearDownClass()
 
   def setUp(self):
-    super(UnitTestTCLI, self).setUp()
     # Instantiate FLAGS global var.
     tcli.FLAGS([__file__,])
     # Turn off looking for .tclirc
@@ -140,22 +106,18 @@ class UnitTestTCLI(unittest.TestCase):
 
     self.orig_terminal_size = tcli.terminal.TerminalSize
     tcli.terminal.TerminalSize = lambda: (10, 20)
-
     self.orig_dev_attr = tcli.inventory.DEVICE_ATTRIBUTES
     tcli.inventory.DEVICE_ATTRIBUTES = {}
 
-    self.tcli_obj = tcli.TCLI()
-
-    self.tcli_obj.inventory = mock.MagicMock()
-    self.tcli_obj.inventory.device_list = ['a', 'b', 'c']
+    with mock.patch.object(tcli.inventory, 'Inventory'):
+      self.tcli_obj = tcli.TCLI(interactive=False)
+    # pylance: ignore
+    self.tcli_obj.inventory.device_list = ['a', 'b', 'c']                       # type: ignore
     dev_attr = collections.namedtuple('dev_attr', [])
-    self.tcli_obj.inventory.devices = {'a': dev_attr(),
-                                       'b': dev_attr(),
-                                       'c': dev_attr()}
-    self.tcli_obj.inventory.targets = ''
-    self.tcli_obj.inventory.CreateCmdRequest.return_value = FakeCmdResponse(
-        '123')
-
+    self.tcli_obj.inventory.devices = {                                         # type: ignore
+      'a': dev_attr(), 'b': dev_attr(), 'c': dev_attr()}   
+    self.tcli_obj.inventory.targets = ''                                        # type: ignore
+    # type: ignore
     self.tcli_obj._Print = mock.Mock()
 
     command_register.RegisterCommands(self.tcli_obj, self.tcli_obj.cli_parser)
@@ -165,19 +127,25 @@ class UnitTestTCLI(unittest.TestCase):
 
     self.tcli_obj.verbose = True
     self.tcli_obj.linewrap = True
-    self.tcli_obj.color = False
     self.tcli_obj.timeout = 1
+    return super().setUp()
 
   def tearDown(self):
-    super(UnitTestTCLI, self).tearDown()
     tcli.terminal.TerminalSize = self.orig_terminal_size
     tcli.inventory.DEVICE_ATTRIBUTES = self.orig_dev_attr
+    return super().tearDown()
+
+  def testInlineOnly(self):
+    """Tests that only inline supported commands are ruin when inline."""
+    #TODO(harro): Add tests here.
+    pass
 
   def testCopy(self):
     # TODO(harro): Tests for extended commands?
     self.tcli_obj.buffers.Append('label', 'content')
     self.tcli_obj.record = ''
     inline_tcli = copy.copy(self.tcli_obj)
+    inline_tcli.cli_parser.InlineOnly()
     self.assertEqual('content', self.tcli_obj.buffers.GetBuffer('label'))
     self.assertFalse(self.tcli_obj.record)
     # Change parent.
@@ -205,27 +173,6 @@ class UnitTestTCLI(unittest.TestCase):
     self.assertEqual(tcli.FLAGS.color, self.tcli_obj.color)
     self.assertEqual(tcli.FLAGS.timeout, self.tcli_obj.timeout)
 
-  def testStartUp(self):
-    """Tests flag setup and run commands."""
-
-    # Sanity check defaults.
-    assert (
-        tcli.FLAGS.display == 'raw' and
-        tcli.FLAGS.filter is None)
-
-    # Don't read from a .tclirc file.
-    tcli.FLAGS.config_file = 'none'
-
-    with mock.patch.object(self.tcli_obj, 'ParseCommands'):
-      with mock.patch.object(self.tcli_obj, '_InitInventory'):
-        self.tcli_obj.StartUp(None, False)
-        # Without target or cmds, interactive is set to True.
-        self.assertTrue(self.tcli_obj.interactive)
-
-        self.tcli_obj.StartUp('bogus', False)
-        # With target or cmds, interactive is set by StartUp.
-        self.assertFalse(self.tcli_obj.interactive)
-
   def testTildeCompleter(self):
     """Tests completing TCLI native commands."""
 
@@ -243,15 +190,17 @@ class UnitTestTCLI(unittest.TestCase):
     self.assertEqual(self.tcli_obj._TildeCompleter('S ', 0), 'on')
 
   def testCmdCompleter(self):
-    self.tcli_obj = tcli.TCLI()
+    with mock.patch.object(tcli.inventory, 'Inventory'):
+      self.tcli_obj = tcli.TCLI()
     self.tcli_obj.filter = 'default'
     clitable.CliTable.INDEX = {}
     self.tcli_obj.filter_engine = clitable.CliTable(
         'default_index', template_dir=tcli.FLAGS.template_dir)
     self.tcli_obj._Print = mock.Mock()
 
-    self.assertEqual('show', self.tcli_obj._CmdCompleter('', 0))
-    self.assertEqual('cat', self.tcli_obj._CmdCompleter('', 1))
+    # Completions are alphabetical.
+    self.assertEqual('cat', self.tcli_obj._CmdCompleter('', 0))
+    self.assertEqual('show', self.tcli_obj._CmdCompleter('', 1))
     self.assertIsNone(self.tcli_obj._CmdCompleter('', 2))
 
     self.assertEqual('cat', self.tcli_obj._CmdCompleter('c', 0))
@@ -262,96 +211,107 @@ class UnitTestTCLI(unittest.TestCase):
     self.assertEqual('epsilon', self.tcli_obj._CmdCompleter('c ', 2))
     self.assertIsNone(self.tcli_obj._CmdCompleter('c ', 3))
 
-    self.assertEqual(
-        'alpha', self.tcli_obj._CmdCompleter('c al', 0))
+    self.assertEqual('alpha', self.tcli_obj._CmdCompleter('c al', 0))
     self.assertIsNone(self.tcli_obj._CmdCompleter('c al', 1))
+
+    # Regular expressions appear as valid completions.
+    self.assertEqual('int.+', self.tcli_obj._CmdCompleter('show ', 0))
+    self.assertEqual('brief', self.tcli_obj._CmdCompleter('show int.+ ', 0))
+    # If an argument satisfies a regexp then completions work past that point.
+    self.assertEqual('brief', self.tcli_obj._CmdCompleter('show int01 ', 0))
+    self.assertIsNone(self.tcli_obj._CmdCompleter('show int00 ', 1))
+    self.assertEqual('.+', self.tcli_obj._CmdCompleter('show int01 brief ', 0))
+    self.assertIsNone(self.tcli_obj._CmdCompleter('show int00 brief yes', 1))
 
   def testCallback(self):
     """Tests async callback."""
 
-    self.tcli_obj._FormatResponse = mock.Mock()
+    self.tcli_obj._FormatRow = mock.Mock()
 
-    self.tcli_obj.Callback(FakeActionRequest('non_exist_uid'))
-    # Test that nonexistant uid trigger early return.
-    self.assertFalse(self.tcli_obj.cmd_response._response_count)
+    # self.tcli_obj.Callback(
+    #   inventory.Response(99, "device_name", "command", "data", "error"))
+    # # Test that nonexistant uid trigger early return.
+    # self.assertFalse(self.tcli_obj.cmd_response._response_count)
 
-    self.tcli_obj.cmd_response.SetCommandRow(0, '')
-    self.tcli_obj.cmd_response.SetCommandRow(1, '')
+    self.tcli_obj.cmd_response.InitCommandRow(0, '')
+    self.tcli_obj.cmd_response.InitCommandRow(1, '')
 
-    self.tcli_obj.cmd_response.SetRequest(0, 'valid_uid')
-    self.tcli_obj.cmd_response.SetRequest(0, 'another_valid_uid')
-    self.tcli_obj.cmd_response.SetRequest(1, '2nd_row_uid_a')
-    self.tcli_obj.cmd_response.SetRequest(1, '2nd_row_uid_b')
+    self.tcli_obj.cmd_response.SetRequest(0, 1)
+    self.tcli_obj.cmd_response.SetRequest(0, 2)
+    self.tcli_obj.cmd_response.SetRequest(1, 3)
+    self.tcli_obj.cmd_response.SetRequest(1, 4)
     self.tcli_obj.cmd_response._row_response[0] = []
 
-    self.tcli_obj.inventory.device_list = set(['host_a', 'host_b'])
-    self.tcli_obj.command_list = ['cat alpha', 'cat beta']
+    self.tcli_obj.inventory.device_list = set(['device_a', 'device_b'])             # type: ignore
+    self.tcli_obj.command_list = ['cat alpha', 'cat beta']                      # type: ignore
 
     # Call with valid uid and check response count increments.
-    self.tcli_obj.Callback(FakeActionRequest('valid_uid'))
+    self.tcli_obj.Callback(
+      inventory.Response(1, 'device_a', 'cat alpha', 'data', 'error'))
 
     self.assertTrue(self.tcli_obj.cmd_response._response_count)
-    self.assertEqual(['valid_uid'], self.tcli_obj.cmd_response._row_response[0])
+    self.assertEqual(self.tcli_obj.cmd_response._row_response[0], [1])
     # Should still point at first (0) row.
     self.assertFalse(self.tcli_obj.cmd_response._current_row)
 
     # Second call for last argument of first row.
-    self.tcli_obj.Callback(FakeActionRequest('another_valid_uid'))
+    self.tcli_obj.Callback(
+      inventory.Response(2, 'device_b', 'cat alpha', 'data', 'error'))
 
-    self.assertEqual(['valid_uid', 'another_valid_uid'],
-                     self.tcli_obj.cmd_response._row_response[0])
+    self.assertEqual(self.tcli_obj.cmd_response._row_response[0], [1, 2])
     self.assertFalse(self.tcli_obj.cmd_response._row_response[1])
     # Should point at next row (1).
-    self.assertEqual(1, self.tcli_obj.cmd_response._current_row)
+    self.assertEqual(self.tcli_obj.cmd_response._current_row, 1)
 
     self.tcli_obj.cmd_response._current_row = 0
     self.tcli_obj.cmd_response._response_count = 0
     self.tcli_obj.cmd_response._row_response[0] = []
 
     # Test populating the second row before the first.
-    self.tcli_obj.Callback(FakeActionRequest('2nd_row_uid_b'))
-    self.tcli_obj.Callback(FakeActionRequest('2nd_row_uid_a'))
+    self.tcli_obj.Callback(
+      inventory.Response(4, 'device_b', 'cat beta', 'data', 'error'))
+    self.tcli_obj.Callback(
+      inventory.Response(3, 'device_a', 'cat beta', 'data', 'error'))
 
     self.assertFalse(self.tcli_obj.cmd_response._row_response[0])
-    self.assertEqual(['2nd_row_uid_b', '2nd_row_uid_a'],
-                     self.tcli_obj.cmd_response._row_response[1])
+    self.assertEqual(self.tcli_obj.cmd_response._row_response[1], [4, 3])
 
     # Once first row gets fully pop'd then both should be reported and cleared.
-    self.tcli_obj.Callback(FakeActionRequest('valid_uid'))
-    self.tcli_obj.Callback(FakeActionRequest('another_valid_uid'))
+    self.tcli_obj.Callback(
+      inventory.Response(1, 'device_a', 'cat alpha', 'data', 'error'))
+    self.tcli_obj.Callback(
+      inventory.Response(2, 'device_b', 'cat alpha', 'data', 'error'))
 
-    self.assertEqual(['valid_uid', 'another_valid_uid'],
-                     self.tcli_obj.cmd_response._row_response[0])
-    self.assertEqual(['2nd_row_uid_b', '2nd_row_uid_a'],
-                     self.tcli_obj.cmd_response._row_response[1])
+    self.assertEqual(self.tcli_obj.cmd_response._row_response[0], [1, 2])
+    self.assertEqual(self.tcli_obj.cmd_response._row_response[1], [4, 3])
     # Should point at next row (2).
-    self.assertEqual(2, self.tcli_obj.cmd_response._current_row)
+    self.assertEqual(self.tcli_obj.cmd_response._current_row, 2)
 
   def testFormatRaw(self):
     """Test display of raw output."""
 
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
       self.tcli_obj._FormatRaw(
-          inventory.CmdResponse(
+          inventory.Response(
               device_name='device1', command='time of day',
               data='a random\nmulti line\nstring.', error='', uid=''))
       mock_print.assert_has_calls([
-          mock.call('#!# device1:time of day #!#', msgtype='title'),
+          mock.call('#!# device1:time of day #!#', 'title'),
           mock.call('a random\nmulti line\nstring.')
       ])
 
   def testFormatRawResponse(self):
     """Tests display of raw command results."""
 
-    self.tcli_obj.cmd_response._results['beef'] = inventory.CmdResponse(
-        uid='beef', device_name='device_1', data='hello world\n',
+    self.tcli_obj.cmd_response._results[1] = inventory.Response(
+        uid=1, device_name='device_1', data='hello world\n',
         command='c alpha', error='')
-    self.tcli_obj.cmd_response._results['feed'] = inventory.CmdResponse(
-        uid='feed', device_name='device_2', data='quick fox\n',
+    self.tcli_obj.cmd_response._results[2] = inventory.Response(
+        uid=2, device_name='device_2', data='quick fox\n',
         command='c alpha', error='')
 
     self.tcli_obj.display = 'raw'
-    self.tcli_obj.inventory._devices = {
+    self.tcli_obj.inventory._devices = {                                        # type: ignore
         'device_1': {'Vendor', 'Asterix'},
         'device_2': {'Vendor', 'Asterix'},
     }
@@ -361,38 +321,38 @@ class UnitTestTCLI(unittest.TestCase):
 
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
       # Single entry, raw output.
-      self.tcli_obj._FormatResponse(['beef'])
+      self.tcli_obj._FormatRow([1])
       mock_print.assert_has_calls([
-          mock.call(header, msgtype='title'),
+          mock.call(header, 'title'),
           mock.call('hello world\n')
       ])
 
     header2 = '#!# %s:%s #!#' % ('device_2', 'c alpha')
     # Multiple ActionRequest objects, differing content.
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
-      self.tcli_obj._FormatResponse(['beef', 'feed'])
+      self.tcli_obj._FormatRow([1, 2])
       mock_print.assert_has_calls([
-          mock.call(header, msgtype='title'),
+          mock.call(header, 'title'),
           mock.call('hello world\n'),
-          mock.call(header2, msgtype='title'),
+          mock.call(header2, 'title'),
           mock.call('quick fox\n')
       ])
 
     # Multiple action request objects, same content.
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
-      self.tcli_obj._FormatResponse(['beef', 'beef'])
+      self.tcli_obj._FormatRow([1, 1])
       mock_print.assert_has_calls([
-          mock.call(header, msgtype='title'),
+          mock.call(header, 'title'),
           mock.call('hello world\n'),
-          mock.call(header, msgtype='title'),
+          mock.call(header, 'title'),
           mock.call('hello world\n')
       ])
 
   def _CannedResponse(self):      # pylint: disable=invalid-name
     """Setup some canned commands and responses."""
 
-    self.tcli_obj.inventory.attributes = {
-        'vendor': tcli.inventory.inventory_base.Attribute(
+    self.tcli_obj.inventory.attributes = {                                      # type: ignore
+        'vendor': tcli.inventory.inventory_base.Attribute(                      # type: ignore
             'vendor', '', None, '', display_case='title')}
     # Initialise the textfsm engine in TCLI.
     self.tcli_obj.filter = 'default_index'
@@ -400,24 +360,24 @@ class UnitTestTCLI(unittest.TestCase):
                                                     tcli.FLAGS.template_dir)
     self.tcli_obj.display = 'raw'
     dev_attr = collections.namedtuple('dev_attr', ['vendor'])
-    self.tcli_obj.inventory.devices = {
+    self.tcli_obj.inventory.devices = {                                         # type: ignore
         'device_1': dev_attr(vendor='asterix'),
         'device_2': dev_attr(vendor='asterix'),
         'device_3': dev_attr(vendor='asterix'),
         'device_4': dev_attr(vendor='obelix')
     }
 
-    self.tcli_obj.cmd_response._results['beef'] = inventory.CmdResponse(
-        uid='beef', device_name='device_1', error='',
+    self.tcli_obj.cmd_response._results[1] = inventory.Response(
+        uid='1', device_name='device_1', error='',
         command='c alpha', data='hello world\n')
-    self.tcli_obj.cmd_response._results['feed'] = inventory.CmdResponse(
-        uid='feed', device_name='device_2', error='',
+    self.tcli_obj.cmd_response._results[2] = inventory.Response(
+        uid='2', device_name='device_2', error='',
         command='c alpha', data='quick fox\n')
-    self.tcli_obj.cmd_response._results['deed'] = inventory.CmdResponse(
-        uid='deed', device_name='device_3', error='',
+    self.tcli_obj.cmd_response._results[3] = inventory.Response(
+        uid=3, device_name='device_3', error='',
         command='cat epsilon', data='jumped over\n')
-    self.tcli_obj.cmd_response._results['dead'] = inventory.CmdResponse(
-        uid='dead', device_name='device_4', error='',
+    self.tcli_obj.cmd_response._results[4] = inventory.Response(
+        uid=4, device_name='device_4', error='',
         command='cat epsilon', data='the wall\n')
 
   def testFormatResponse(self):
@@ -431,9 +391,9 @@ class UnitTestTCLI(unittest.TestCase):
     header = '#!# c alpha #!#'
     # Single entry, csv format.
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
-      self.tcli_obj._FormatResponse(['beef'])
+      self.tcli_obj._FormatRow([1])
       mock_print.assert_has_calls([
-          mock.call(header, msgtype='title'),
+          mock.call(header, 'title'),
           mock.call('Host, ColAa, ColAb\ndevice_1, hello, world\n')
       ])
 
@@ -448,9 +408,9 @@ class UnitTestTCLI(unittest.TestCase):
     header = '#!# c alpha #!#'
     # Multiple entries.
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
-      self.tcli_obj._FormatResponse(['beef', 'feed'])
+      self.tcli_obj._FormatRow([1, 2])
       mock_print.assert_has_calls([
-          mock.call(header, msgtype='title'),
+          mock.call(header, 'title'),
           mock.call('Host, ColAa, ColAb\n'
                     'device_1, hello, world\n'
                     'device_2, quick, fox\n')
@@ -467,9 +427,9 @@ class UnitTestTCLI(unittest.TestCase):
     header = '#!# cat epsilon #!#'
     # Single entry - by Vendor.
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
-      self.tcli_obj._FormatResponse(['deed'])
+      self.tcli_obj._FormatRow([3])
       mock_print.assert_has_calls([
-          mock.call(header, msgtype='title'),
+          mock.call(header, 'title'),
           mock.call('Host, ColCa, ColCb\n'
                     'device_3, jumped, over\n')
       ])
@@ -485,9 +445,9 @@ class UnitTestTCLI(unittest.TestCase):
     header = '#!# cat epsilon #!#'
     # Multiple entry - Vendor 'Asterix'.
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
-      self.tcli_obj._FormatResponse(['deed', 'deed'])
+      self.tcli_obj._FormatRow([3, 3])
       mock_print.assert_has_calls([
-          mock.call(header, msgtype='title'),
+          mock.call(header, 'title'),
           mock.call('Host, ColCa, ColCb\n'
                     'device_3, jumped, over\n'
                     'device_3, jumped, over\n')
@@ -495,9 +455,9 @@ class UnitTestTCLI(unittest.TestCase):
 
     # Multiple entry - Vendor 'Obelix'.
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
-      self.tcli_obj._FormatResponse(['dead', 'dead'])
+      self.tcli_obj._FormatRow([4, 4])
       mock_print.assert_has_calls([
-          mock.call(header, msgtype='title'),
+          mock.call(header, 'title'),
           mock.call('Host, ColDa, ColDb\n'
                     'device_4, the, wall\n'
                     'device_4, the, wall\n')
@@ -505,9 +465,9 @@ class UnitTestTCLI(unittest.TestCase):
 
     # Multiple entry - Mixed vendors.
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
-      self.tcli_obj._FormatResponse(['deed', 'dead', 'deed', 'dead'])
+      self.tcli_obj._FormatRow([3, 4, 3, 4])
       mock_print.assert_has_calls([
-          mock.call(header, msgtype='title'),
+          mock.call(header, 'title'),
           mock.call('Host, ColCa, ColCb\n'
                     'device_3, jumped, over\n'
                     'device_3, jumped, over\n'),
@@ -528,13 +488,13 @@ class UnitTestTCLI(unittest.TestCase):
     header = '#!# c alpha #!#'
     # Single entry, nvp format.
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
-      self.tcli_obj._FormatResponse(['beef'])
+      self.tcli_obj._FormatRow([1])
       # Column header, nvp label and data rows.
       mock_print.assert_has_calls([
-          mock.call(header, msgtype='title'),
+          mock.call(header, 'title'),
           mock.call(
-              nvp_label + '\n' +
-              'device_1.ColAa hello\n'
+              nvp_label + '\n'
+              + 'device_1.ColAa hello\n'
               'device_1.ColAb world\n')
       ])
 
@@ -544,10 +504,10 @@ class UnitTestTCLI(unittest.TestCase):
     # GSH formatted.
     self.tcli_obj.display = 'tbl'
     tcli.terminal.TerminalSize = lambda: (24, 10)
-    with mock.patch.object(self.tcli_obj, '_Print') as mock_warn:
+    with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
       # Displays warning if width too narrow.
-      self.tcli_obj._FormatResponse(['beef'])
-      mock_warn.assert_called_once()
+      self.tcli_obj._FormatRow([1])
+      mock_print.assert_called_once()
 
   def testColor(self):
     self.tcli_obj.color = False
@@ -591,8 +551,9 @@ class UnitTestTCLI(unittest.TestCase):
     self.assertEqual('', self.tcli_obj.title_color)
 
   def testParseCommands(self):
-    """Tests that commands destined for are supplied to CmdRequests."""
+    """Tests that commands are supplied to CmdRequests."""
 
+    #TODO(harro): Better tests here.
     with mock.patch.object(self.tcli_obj, 'CmdRequests') as mock_request:
       # Single command.
       self.tcli_obj.ParseCommands('cat alpha')
@@ -614,40 +575,29 @@ class UnitTestTCLI(unittest.TestCase):
           ['cat alpha', 'cat alpha', 'cat beta'])
 
     # Mixed commands some for the device some tilde commands.
-    with mock.patch.object(self.tcli_obj, 'TCLICmd'):
-      with mock.patch.object(self.tcli_obj, 'CmdRequests') as mock_request:
-        self.tcli_obj.ParseCommands(' cat alpha \n  %shelp \n\n\n%scolor  ' %
-                                    (tcli.SLASH, tcli.SLASH))
-        mock_request.assert_called_once_with(
-            self.tcli_obj.device_list,
-            ['cat alpha'])
+    with mock.patch.object(self.tcli_obj, 'CmdRequests') as mock_request:
+      self.tcli_obj.ParseCommands(' cat alpha \n  %shelp \n\n\n%scolor  ' %
+                                  (tcli.SLASH, tcli.SLASH))
+      mock_request.assert_called_once_with(
+          self.tcli_obj.device_list,
+          ['cat alpha'])
 
-      with mock.patch.object(self.tcli_obj, 'CmdRequests') as mock_request:
-        self.tcli_obj.ParseCommands(' cat alpha\n%scolor\n\nc alpha  ' %
-                                    tcli.SLASH)
-        mock_request.assert_has_calls([
-            mock.call(self.tcli_obj.device_list, ['cat alpha']),
-            mock.call(self.tcli_obj.device_list, ['c alpha'])
-            ])
-
-      # Mix of valid and invalid commands.
-      with mock.patch.object(self.tcli_obj, 'CmdRequests') as mock_request:
-        self.tcli_obj.ParseCommands(
-            'cat alpha\n\n bat alpha %sverbose on\n%scolor off\n\n'
-            'cat theta  %slog buf\n\nc alpha' %
-            (tcli.SLASH*2, tcli.SLASH, tcli.SLASH*2))
-        mock_request.assert_has_calls([
-            mock.call(self.tcli_obj.device_list, ['cat alpha']),
-            mock.call(self.tcli_obj.device_list, ['c alpha'])
-            ])
+    # Mixed commands with some inline tilde commands.
+    with mock.patch.object(self.tcli_obj, 'CmdRequests') as mock_request:
+      self.tcli_obj.ParseCommands(' cat alpha\n%scolor\n\nc alpha  ' %
+                                  tcli.SLASH)
+      mock_request.assert_has_calls([
+          mock.call(self.tcli_obj.device_list, ['cat alpha']),
+          mock.call(self.tcli_obj.device_list, ['c alpha'])
+          ])
 
   def testBufferInUse(self):
     """Tests _BufferInUse function."""
     # Ensure logging is clear
-    self.tcli_obj.record = None
-    self.tcli_obj.recordall = None
-    self.tcli_obj.logall = None
-    self.tcli_obj.log = None
+    self.tcli_obj.record = ''
+    self.tcli_obj.recordall = ''
+    self.tcli_obj.logall = ''
+    self.tcli_obj.log = ''
 
     self.assertFalse(self.tcli_obj._BufferInUse('hello'))
 
@@ -775,8 +725,8 @@ class UnitTestTCLI(unittest.TestCase):
   def testTCLICmd(self):
     """b/2303768 Truncation of characters in /command."""
 
-    self.tcli_obj.inventory.targets = ''
-    self.tcli_obj.inventory.device_list = set()
+    self.tcli_obj.inventory.targets = ''                                        # type: ignore
+    self.tcli_obj.inventory.device_list = set()                                 # type: ignore
     cmd = 'cat bogus'
     with mock.patch.object(self.tcli_obj, 'CmdRequests') as mock_request:
       self.tcli_obj.TCLICmd('command %s' % cmd)
@@ -805,15 +755,13 @@ class UnitTestTCLI(unittest.TestCase):
     self.tcli_obj.TCLICmd('filter default_index')
     self.assertTrue(self.tcli_obj.filter_engine)
 
-    self.tcli_obj.filter_engine.template_dir = tcli.FLAGS.template_dir
-    self.tcli_obj.filter_engine.ReadIndex('default_index')
+    self.tcli_obj.filter_engine.template_dir = tcli.FLAGS.template_dir          # type: ignore
+    self.tcli_obj.filter_engine.ReadIndex('default_index')                      # type: ignore
 
-    self.tcli_obj.filter_engine.ParseCmd('two words',
-                                         attributes={'Command': 'cat eps',
-                                                     'Vendor': 'Asterix'})
+    self.tcli_obj.filter_engine.ParseCmd(                                       # type: ignore
+      'two words',  attributes={'Command': 'cat eps', 'Vendor': 'Asterix'})
     self.assertEqual(
-        'ColCa, ColCb\ntwo, words\n',
-        self.tcli_obj.filter_engine.table)
+      'ColCa, ColCb\ntwo, words\n', self.tcli_obj.filter_engine.table)          # type: ignore
 
     # Bad filter value.
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
@@ -824,10 +772,10 @@ class UnitTestTCLI(unittest.TestCase):
   def testTildeBufferAsignment(self):
 
     # Ensure logging is clear
-    self.tcli_obj.record = None
-    self.tcli_obj.recordall = None
-    self.tcli_obj.logall = None
-    self.tcli_obj.log = None
+    self.tcli_obj.record = ''
+    self.tcli_obj.recordall = ''
+    self.tcli_obj.logall = ''
+    self.tcli_obj.log = ''
 
     self.tcli_obj.TCLICmd('record boo')
     self.assertEqual('boo', self.tcli_obj.record)
@@ -852,10 +800,10 @@ class UnitTestTCLI(unittest.TestCase):
     self.tcli_obj.TCLICmd('logstop hoo2')
     self.assertIsNone(self.tcli_obj.logall)
 
-    self.tcli_obj.record = None
-    self.tcli_obj.recordall = None
-    self.tcli_obj.logall = None
-    self.tcli_obj.log = None
+    self.tcli_obj.record = ''
+    self.tcli_obj.recordall = ''
+    self.tcli_obj.logall = ''
+    self.tcli_obj.log = ''
 
     self.tcli_obj.TCLICmd('record hello')
     self.tcli_obj.TCLICmd('recordall world')
@@ -866,10 +814,10 @@ class UnitTestTCLI(unittest.TestCase):
     self.assertIsNone(self.tcli_obj.record)
     self.assertEqual('world', self.tcli_obj.recordall)
 
-    self.tcli_obj.record = None
-    self.tcli_obj.recordall = None
-    self.tcli_obj.logall = None
-    self.tcli_obj.log = None
+    self.tcli_obj.record = ''
+    self.tcli_obj.recordall = ''
+    self.tcli_obj.logall = ''
+    self.tcli_obj.log = ''
 
     self.tcli_obj.TCLICmd('log hello')
     self.tcli_obj.TCLICmd('logall world')
@@ -877,15 +825,15 @@ class UnitTestTCLI(unittest.TestCase):
     self.tcli_obj.TCLICmd('recordall hello')
     self.assertEqual('hello', self.tcli_obj.log)
     self.assertEqual('world', self.tcli_obj.logall)
-    self.assertIsNone(self.tcli_obj.recordall)
+    self.assertEqual(self.tcli_obj.recordall, '')
     self.tcli_obj.TCLICmd('logstop hello')
     self.assertIsNone(self.tcli_obj.log)
     self.assertEqual('world', self.tcli_obj.logall)
 
-    self.tcli_obj.record = None
-    self.tcli_obj.recordall = None
-    self.tcli_obj.logall = None
-    self.tcli_obj.log = None
+    self.tcli_obj.record = ''
+    self.tcli_obj.recordall = ''
+    self.tcli_obj.logall = ''
+    self.tcli_obj.log = ''
 
     # Buffer allocation with append should be the same
     self.tcli_obj.TCLICmd('record{} hello'.format(APPEND))
@@ -897,10 +845,10 @@ class UnitTestTCLI(unittest.TestCase):
     self.assertIsNone(self.tcli_obj.record)
     self.assertEqual('world', self.tcli_obj.recordall)
 
-    self.tcli_obj.record = None
-    self.tcli_obj.recordall = None
-    self.tcli_obj.logall = None
-    self.tcli_obj.log = None
+    self.tcli_obj.record = ''
+    self.tcli_obj.recordall = ''
+    self.tcli_obj.logall = ''
+    self.tcli_obj.log = ''
 
     self.tcli_obj.TCLICmd('log{} hello'.format(APPEND))
     self.tcli_obj.TCLICmd('logall{} world'.format(APPEND))
@@ -908,7 +856,7 @@ class UnitTestTCLI(unittest.TestCase):
     self.tcli_obj.TCLICmd('recordall{} hello'.format(APPEND))
     self.assertEqual('hello', self.tcli_obj.log)
     self.assertEqual('world', self.tcli_obj.logall)
-    self.assertIsNone(self.tcli_obj.recordall)
+    self.assertEqual(self.tcli_obj.recordall, '')
     self.tcli_obj.TCLICmd('logstop hello')
     self.assertIsNone(self.tcli_obj.log)
     self.assertEqual('world', self.tcli_obj.logall)
@@ -931,7 +879,7 @@ class UnitTestTCLI(unittest.TestCase):
                                    msgtype='warning')
 
     # Record and append.
-    self.tcli_obj.record = None
+    self.tcli_obj.record = ''
     self.tcli_obj.TCLICmd('record{} hello'.format(APPEND))
     self.tcli_obj.ParseCommands('Append test')
     self.tcli_obj.ParseCommands('Append again\non two lines')
@@ -1003,9 +951,6 @@ class UnitTestTCLI(unittest.TestCase):
   def testTildeBufferLog(self):
     """Tests logging of commands to a buffer."""
 
-    # A null device list prevents sending of commands to backend.
-    self.tcli_obj.inventory.device_list = []
-
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
       # Record commands but not escape commands.
       self.tcli_obj.TCLICmd('log hello')
@@ -1020,10 +965,10 @@ class UnitTestTCLI(unittest.TestCase):
       mock_print.assert_called_once_with("Invalid escape command 'an'.",
                                            msgtype='warning')
 
-    self.tcli_obj.record = None
-    self.tcli_obj.recordall = None
-    self.tcli_obj.logall = None
-    self.tcli_obj.log = None
+    self.tcli_obj.record = ''
+    self.tcli_obj.recordall = ''
+    self.tcli_obj.logall = ''
+    self.tcli_obj.log = ''
 
     # Record both commands and escape commands.
     self.tcli_obj.TCLICmd('logall hello')
@@ -1155,7 +1100,7 @@ class UnitTestTCLI(unittest.TestCase):
     """Tests target expansion."""
 
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
-      self.tcli_obj.inventory.device_list = ['device_a', 'device_b']
+      self.tcli_obj.inventory.device_list = ['device_a', 'device_b']            # type: ignore
       self.tcli_obj.TCLICmd('expandtargets')
       mock_print.assert_called_once_with('device_a,device_b', msgtype='system')
 

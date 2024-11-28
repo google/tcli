@@ -110,7 +110,7 @@ class CommandParser(dict):
         'completer': completer
     })
 
-  def UnRegisterCommand(self, command_name:str) -> None:
+  def UnRegisterCommand(self, command_name: str) -> None:
     """Removes support for command from command.
 
     Precondition, command is valid and exists.
@@ -121,7 +121,7 @@ class CommandParser(dict):
     if command_name in self:
       del self[command_name]
 
-  def _CommandExpand(self, line:str) -> tuple[str, str, bool]:
+  def _CommandExpand(self, line: str) -> tuple[str, str, bool]:
     """Strips out command name and append indicator from command line.
 
     e.g. S -> ('safemode', '', False),
@@ -182,7 +182,7 @@ class CommandParser(dict):
 
     return self[command_name].handler.__call__(command_name, args, append)
 
-  def ExecWithDefault(self, command_name:str) -> str|None:
+  def ExecWithDefault(self, command_name: str) -> str|None:
     """Executes command handler with the default value.
 
     Args:
@@ -215,7 +215,7 @@ class CommandParser(dict):
 
     return self.ExecHandler(command_name, [value], False)
 
-  def ExtractInlineCommands(self, command:str) -> tuple[str,list[str]]:
+  def ExtractInlineCommands(self, command: str) -> tuple[str, list[str]]:
     f"""Separate out inline commmand overrides from command input.
 
     Converts something like:
@@ -276,7 +276,7 @@ class CommandParser(dict):
 
     return (command_str + command_suffix, inline_commands)
 
-  def ExtractPipe(self, command:str) -> tuple[str,str]:
+  def ExtractPipe(self, command: str) -> tuple[str, str]:
     """Separate out local pipe suffix from command input.
 
     Converts something like:
@@ -339,7 +339,7 @@ class CommandParser(dict):
 
     return (lhs_str.strip(), ''.join(new_token_list).strip())
 
-  def GetDefault(self, command_name:str) -> typing.Any:
+  def GetDefault(self, command_name: str) -> typing.Any:
     """Returns default value for a command.
 
     Precondition, command is valid and exists.
@@ -359,7 +359,7 @@ class CommandParser(dict):
       if not self[command_name].inline:
         self.UnRegisterCommand(command_name)
 
-  def ParseCommandLine(self, line:str) -> tuple[str, list[str], bool]:
+  def ParseCommandLine(self, line: str) -> tuple[str, list[str], bool]:
     """Parse string into command and arguments.
 
     Split line into command, list of arguments and bool indicating append

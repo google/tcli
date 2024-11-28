@@ -1,7 +1,7 @@
 # TCLI – TextFSM Device CLI
 
-> Forked from https://github.com/google/tcli - as that repo is archived.
-> 
+> Forked from <https://github.com/google/tcli> - as that repo is archived.
+>
 > TCLI was a starter project at Google back in 2008. Although a powerful tool for network
 > troubleshooting, and popular within Google for over a decade, it is accidental code lacking in
 > software design. The fork here may add little in the way of functionality, it does however slay a
@@ -18,29 +18,32 @@ The cross section of devices to receive commands is controlled by matching on de
 other attributes. The commands are sent and received asyncronously and the outputs are collated
 into tables for a unified view.
 
-Useful for real time analysis, interactive or exploratory troubleshooting, and creating holistic views
-of device state or configuration for the cross section of the fleet you are interested in.
+Useful for real time analysis, interactive or exploratory troubleshooting, and creating holistic
+views of device state or configuration for the cross section of the fleet you are interested in.
 
 Can be used against a live network, for real-time data, or against a repository of stored command
 outputs for offline use with near-realtime data.
 
-See the [TCLI Power Users Guide](https://github.com/harro/tcli/wiki/TCLI-Power-Users-Guide) for how 
+See the [TCLI Power Users Guide](https://github.com/harro/tcli/wiki/TCLI-Power-Users-Guide) for how
 to make use of the interactive CLI functionality.
 
 ## Cautions and Caveats
 
-Empowers users to run commands across potentially large sets of devices with very few restrictions
-– please use wisely and cautiously.
+Empowers users to run commands across potentially large sets of devices with very few restrictions –
+please use wisely and cautiously.
 
-Does not support commands that are multi-part, or have non-discrete responses 
+Does not support commands that are multi-part, or have non-discrete responses
 e.g. the **ping** command.
 
-> **Note**<br> You can use commands like `ping count 5 127.0.0.1` or
-`monitor traffic brief count 2` that do not require <kbd>Ctrl</kbd>+<kbd>C</kbd> to terminate.
+<!-- markdownlint-disable MD033 -->
+> **Note:** You can use commands like `ping count 5 127.0.0.1` or
+`monitor traffic brief count 2` that do not require
+<kbd>Ctrl</kbd> + <kbd>C</kbd> to terminate.
+<!-- markdownlint-enable MD033 -->
 
 ## Architecture
 
-TCLI is the front end of the software stack and there are several additional 
+TCLI is the front end of the software stack and there are several additional
 components needed for a complete solution.
 
 ```mermaid
@@ -67,18 +70,20 @@ CLI output into structured tables
 to be able to structure output for specific commands and families of devices.
 * **Accessor**: A service to send and receive commands to/from devices.
 Examples include:
-    * [Notch](https://pypi.org/project/notch.agent/)
-    * [Rancid](https://pypi.org/project/rancidcmd/)
-    * [Salt](https://docs.saltproject.io/en/latest/contents.html)
-    * [Scrapli](https://carlmontanari.github.io/scrapli/)
-    * [Netmiko](https://pypi.org/project/netmiko/)
+  * [Notch](https://pypi.org/project/notch.agent/)
+  * [Rancid](https://pypi.org/project/rancidcmd/)
+  * [Salt](https://docs.saltproject.io/en/latest/contents.html)
+  * [Scrapli](https://carlmontanari.github.io/scrapli/)
+  * [Netmiko](https://pypi.org/project/netmiko/)
 * **Inventory**: A database, DNS or CVS file of device names and attributes, or the data file
 from the accessor library above, such as router.db from RANCID.
 * **Authenticator**: Authentication and authorisation policies for what commands can be sent
-to devices.<BR>
-An AAA policy might allow NOC personnel to use the CLI but then only permit _'show'_
-commands so that changes cannot be made to the devices.<BR>
-This policy and its implementation will vary greatly between organisations and unfortunately
+to devices.
+  
+  An AAA policy might allow NOC personnel to use the CLI but then only permit _'show'_
+commands so that changes cannot be made to the devices.
+  
+  This policy and its implementation will vary greatly between organisations and unfortunately
 you'll need to _'roll your own'_ here.
 
 ## Getting Started
@@ -87,39 +92,40 @@ Although TCLI requires significant setup and basic Python familiarity. It can be
 of the box with fictitious devices and a limited set of commands with canned output:
 
 * Devices:
-    * device_a
-    * device_b
-    * device_c
+  * device_a
+  * device_b
+  * device_c
 * Commands:
-    * show version
-    * show vlan
+  * show version
+  * show vlan
 
 To try TCLI, execute the **main.py** script in the parent directory.
 
-    python3 main.py
+```python
+python3 main.py
+```
 
-Once setup for your environment, the Power Users guide will get you up and running fast! - 
+Once setup for your environment, the Power Users guide will get you up and running fast! -
 [TCLI Power Users Guide](https://github.com/harro/tcli/wiki/TCLI-Power-Users-Guide)
 
 ## Setup
 
 To use in your environment TCLI needs to be configured to retrieve a list of devices from whatever system
-is used to manage inventory. And integrated to call your device accessor system
+is used to manage the site specific inventory. And integrated to call your device accessor system
 (or to scrape the output files that it produces).
 
-Your site customisations are made to a new file that implements a child class of ```Inventory```.
-This class is declared in ```inventory.py```. so import, inherit, and override the
+Your site customisations are made to a new file that implements a child class of ``Inventory``.
+This class is declared in ``inventory.py``. So import, inherit, and override the
 [methods](https://github.com/search?q=repo%3Aharro%2Ftcli+NotImplementedError&type=code)
-```_FetchDevices``` and ```SendRequests``` of the parent ```Inventory``` class in your file.
+``_FetchDevices`` and ``SendRequests`` of the parent ``Inventory`` class in your file.
 
 A "canned" example is included
-[```inventory_csv.py```](https://github.com/harro/tcli/blob/master/tcli/inventory_csv.py) for illustration.
+[``inventory_csv.py``](https://github.com/harro/tcli/blob/master/tcli/inventory_csv.py) for illustration.
 
-Your substitute module is imported by ```tcli_lib.py``` and a single line for importing needs updating
-[there](https://github.com/search?q=repo%3Aharro%2Ftcli+CHANGEME+tcli_lib.py&type=code)
-to point at your new inventory module instead.
+Your substitute module is imported by the command line flag _'inventory_file'_.
+The module is expected to be located in the tcli directory.
 
-Contributors are welcome to add various ```inventory_<accessor>.py``` files for popular open source
+Contributors are welcome to add various ``inventory_<accessor>.py`` files for popular open source
 device accessor methods.
 
 The structured format for device output is enabled via [TextFSM](https://github.com/google/textfsm).
@@ -128,4 +134,3 @@ formats per the [TextFSM Code Lab](https://github.com/google/textfsm/wiki/Code-L
 Or use the open source template repository
 [ntc-templates](https://github.com/networktocode/ntc-templates)
 that provides a library of templates for many device types and common commands.
-

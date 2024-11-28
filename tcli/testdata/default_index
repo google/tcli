@@ -15,3 +15,6 @@ a_template, .*, .*, c[[at]] a[[lpha]]
 b_template, .*, .*, c[[at]] b[[eta]]
 c_template, .*, Asterix, c[[at]] e[[psilon]]
 d_template, .*, Obelix, c[[at]] e[[psilon]]
+# No canned output for these. Here to test command completion.
+c_template, .*, Asterix, sh[[ow]] int.+ b[[rief]]
+d_template, .*, Asterix, sh[[ow]] int.+ b[[rief]] .+

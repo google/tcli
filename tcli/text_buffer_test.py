@@ -15,6 +15,7 @@
 """Tests for tcli.text_buffer."""
 
 import unittest
+
 from tcli import text_buffer
 
 

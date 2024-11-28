@@ -14,9 +14,7 @@
 """Tests for tcli.inventory_base."""
 
 import collections
-import re
 import unittest
-from unittest import mock
 
 from tcli import inventory_base
 
@@ -113,8 +111,9 @@ class InventoryBaseTest(unittest.TestCase):
     """Test command completion list for valid attribute completions."""
 
     # Completer matches against the global device attributes.
-    self.inv._attributes = {'apple': {},
-                             'pear': {}}
+    self.inv._attributes = {'apple': inventory_base.Attribute('apple'),
+                             'pear': inventory_base.Attribute('pear')}
+
     # A blank word will match all entries, state 0 and state 1.
     self.assertEqual(self.inv._CmdFilterCompleter([''], 0), 'apple')
     self.assertEqual(self.inv._CmdFilterCompleter([''], 1), 'pear')

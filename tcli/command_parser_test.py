@@ -15,6 +15,7 @@
 """Tests for tcli.command_parser."""
 
 import unittest
+
 from tcli import command_parser
 from tcli.command_parser import INLINE 
 

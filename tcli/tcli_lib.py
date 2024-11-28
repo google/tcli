@@ -47,7 +47,6 @@ import subprocess
 import sys
 import tempfile
 import threading
-import typing
 
 from absl import flags
 from absl import logging
@@ -57,9 +56,12 @@ try:
   readline = Readline()
 except(ImportError):
   import readline
+
 from tcli import command_parser
 from tcli import command_register
 from tcli import command_response
+# inventory import will be overridden in main.py
+from tcli import inventory_base as inventory
 from tcli import text_buffer
 from tcli.command_parser import ParseError, I
 from tcli.tcli_textfsm import clitable
@@ -67,13 +69,6 @@ from tcli.tcli_textfsm.clitable import CliTableError
 from textfsm import terminal
 from textfsm import texttable
 from textfsm.texttable import TableError
-
-# Substitute import with appropriate inventory/device accessor library.
-# The example library provided uses static CSV file for inventory and some
-# canned output as example device responses. It serves as an example only.
-## CHANGEME
-##
-from tcli import inventory_csv as inventory  #pylint: disable=g-bad-import-order
 
 # Formats for displaying to the user.
 DISPLAY_FORMATS = command_register.DISPLAY_FORMATS
@@ -197,13 +192,14 @@ class TCLI(object):
     xtargets: String of device names and regular expressions to exclude.
   """
 
-  def __init__(self):
+  def __init__(self, interactive=False, commands='', inventory=None) -> None:
     # Also see copy method when modifying/adding attributes.
 
     # Async callback.
     self._lock = threading.Lock()
-    self._completer_list = []
-    self.interactive = False
+    self._completer_list: list[str] = []
+    self.interactive = interactive
+    self.inventory = inventory
     self.filter_engine = None
     self.playback = None
     self.prompt: str|None = None
@@ -226,35 +222,34 @@ class TCLI(object):
     self.buffers = text_buffer.TextBuffer()
     self.cmd_response = command_response.CmdResponse()
     self.cli_parser = command_parser.CommandParser()
-    if not hasattr(self, 'inventory'):
-      self.inventory: inventory.Inventory|None = None
+    if not self.inventory:
+      self._InitInventory()
+    command_register.RegisterCommands(self, self.cli_parser)
+    command_register.SetFlagDefaults(self.cli_parser)
+    # If interactive then the user will input furhter commands.
+    # So we enable safe mode and apply the users .tclirc file.
+    if self.interactive:
+      # Set safe mode.
+      self.cli_parser.ExecHandler('safemode', ['on'], False)
+      # Apply user settings.
+      self._ParseRCFile()
+    if commands:
+      self.ParseCommands(commands)
 
-  def __copy__(self):
-    """Copies attributes from self to new tcli child object."""
-
-    # Inline escape commands are processed in a child object.
-    tcli_obj = TCLI()
-
-    # Copy by reference.
-    # log and record to the same buffers.
+  def __copy__(self) -> "TCLI":
+    """Copies attributes from self to new tcli object."""
+    # Create new instance with existing inventory.
+    tcli_obj = type(self)(inventory=self.inventory)
+    #TODO(harro): Why does this break ParseCommands?
+    # tcli_obj.__dict__.update(self.__dict__)
+  
     tcli_obj.buffers = self.buffers
-    tcli_obj.filter_engine = self.filter_engine
     tcli_obj.cmd_response = self.cmd_response
-    # Use the same client and device access for fetching results.
-    tcli_obj.inventory = self.inventory
-
-    tcli_obj.cli_parser = command_parser.CommandParser()
-    # Only register base class commands, not the inventory.
-    command_register.RegisterCommands(tcli_obj, tcli_obj.cli_parser)
-    # Only support commands that are valid when called inline.
-    tcli_obj.cli_parser.InlineOnly()
-
-    # String values can also be copied by reference.
-    # Assigning new value will not impact original in parent.
     tcli_obj.color = self.color
     tcli_obj.color_scheme = self.color_scheme
     tcli_obj.display = self.display
     tcli_obj.filter = self.filter
+    tcli_obj.filter_engine = self.filter_engine
     tcli_obj.linewrap = self.linewrap
     tcli_obj.log = self.log
     tcli_obj.logall = self.logall
@@ -268,8 +263,10 @@ class TCLI(object):
     tcli_obj.title_color = self.title_color
     tcli_obj.verbose = self.verbose
     tcli_obj.warning_color = self.warning_color
-
     return tcli_obj
+
+  devices = property(lambda self: self.inventory.devices)
+  device_list = property(lambda self: self.inventory.device_list)
 
   def Motd(self) ->None:
     """Display message of the day."""
@@ -301,6 +298,7 @@ class TCLI(object):
       self.inventory = inventory.Inventory()
       # Add additional command support for Inventory library.
       self.inventory.RegisterCommands(self.cli_parser)
+      self.inventory.SetFiltersFromDefaults(self.cli_parser)
     except inventory.AuthError as error_message:
       self._Print(str(error_message), msgtype='warning')
       raise inventory.AuthError()
@@ -332,50 +330,8 @@ class TCLI(object):
               msgtype='warning')
           raise EOFError()
 
-  def StartUp(self, commands, interactive) -> None:
-    """Runs rc file commands and initial startup tasks.
-
-      The RC file may contain any valid TCLI commands including commands to send
-      to devices. At the same time flags are a more specific priority than RC
-      commands _IF_ set explicitly (non default).
-
-      So we parse and set a bunch of flags early that a benigh (do not issue
-      commands to devices or play out buffer content etc).
-      Run the RC file, after which we re-appply explicitly set flags values.
-    Args:
-      commands: List of Strings, device commands to send at startup.
-      interactive: Bool, are we running as an interactive CLI.
-
-    Raises:
-      EOFError: A non-default config_file could not be opened.
-      inventory.AuthError: Inventory could not be retrieved due to permissions.
-      TcliCmdError: Same buffer is target of several record/log commands.
-    """
-
-    # Determine if we are interactive or not.
-    self.interactive = interactive
-    if not commands:
-      self.interactive = True
-    if not self.inventory:
-      self._InitInventory()
-    command_register.RegisterCommands(self, self.cli_parser)
-    if self.inventory:
-      self.inventory.SetFiltersFromDefaults(self.cli_parser)
-    # Set some markup flags early.
-    # We bracket the RC file and apply/reapply the default settings from Flags.
-    command_register.SetFlagDefaults(self.cli_parser)
-    if self.interactive:
-      # Set safe mode.
-      self.cli_parser.ExecHandler('safemode', ['on'], False)
-      # Apply user settings.
-      self._ParseRCFile()
-      # Reapply flag values that may have changed by RC commands.
-      command_register.SetFlagDefaults(self.cli_parser)
-    if commands:
-      self.ParseCommands(commands)
-
   # pylint: disable=unused-argument
-  def Completer(self, word:str, state:int) -> str|None:
+  def Completer(self, word: str, state: int) -> str|None:
     """Command line completion used by readline library."""
 
     # The readline completer is not stateful. So we read the full line and pass
@@ -392,7 +348,7 @@ class TCLI(object):
     # known remote device commands that we support with TextFSM.
     return self._CmdCompleter(full_line, state)
 
-  def _TildeCompleter(self, full_line:str, state:int) -> str|None:
+  def _TildeCompleter(self, full_line: str, state: int) -> str|None:
     """Command line completion for escape commands."""
 
     completer_list = []
@@ -432,12 +388,25 @@ class TCLI(object):
       return SLASH + completer_list[state]
     return None
 
-  def _CmdCompleter(self, full_line:str, state:int) -> str|None:
+  def _CmdCompleter(self, full_line: str, state: int) -> str|None:
     """Commandline completion used by readline library."""
+
+
+    def _ScrubToken(token: str) -> str:
+      """Remove nested (...)? from command completion string."""
+      # This could break legitimate regexps but since these are completion
+      # candidates, That breakage is cosmetic.
+      _reg_exp_str = r'\((?P<value>.*)\)\?'
+      clean_token = re.sub(_reg_exp_str, '\g<value>', token)                    # type: ignore
+      # Repeat until all nested (...)? are removed.
+      while token != clean_token:
+        token = clean_token
+        clean_token = re.sub(_reg_exp_str, '\g<value>', clean_token)            # type: ignore
+      return token
 
     # First invocation, so build candidate list and cache for re-use.
     if state == 0:
-      self._completer_list = []
+      _completer_set = set()
       current_word = ''
       line_tokens = []
       word_boundary = False
@@ -449,7 +418,7 @@ class TCLI(object):
       # Remove double spaces etc
       cleaned_line = re.sub(r'\s+', ' ', cleaned_line)
 
-      # Are we part way through typing a word.
+      # Are we part way through typing a word, or a word boundary.
       if cleaned_line and cleaned_line.endswith(' '):
         word_boundary = True
 
@@ -464,36 +433,38 @@ class TCLI(object):
         if not word_boundary and line_tokens:
           current_word = line_tokens.pop()
 
-      # Compare with table of possible commands
+      # Compare with table of possible command matches in filter_engine.
       if self.filter_engine:
         for row in self.filter_engine.index.index:                              # type: ignore
-          # Split the regexp into tokens, re combine only as many as there are
-          # in the line entered so far.
+          # Split the command match into tokens.
           cmd_tokens = row['Command'].split(' ')
           # Does the line match the partial list of tokens.
-          if (line_tokens and
-              re.match(' '.join(cmd_tokens[:len(line_tokens)]), cleaned_line)):
-            # Take token not from end of regexp, but from the Completer command.
-            token = cmd_tokens[len(line_tokens)]
-          elif not line_tokens:
+          if not line_tokens and cmd_tokens:
             # Currently a blank line so the first token is what we want.
             token = cmd_tokens[0]
+          # Does our line match this command completion candidate.
+          elif (
+            len(cmd_tokens) > len(line_tokens) and
+            re.match(' '.join(cmd_tokens[:len(line_tokens)]), cleaned_line)):
+            # Take the token from off the end of the Completer command.
+            token = cmd_tokens[len(line_tokens)]
           else:
             continue
-          # We have found a match.
-          # Remove completer syntax.
-          token = re.sub(r'\(|\)\?', '', token)
+  
+          # We have found a match. Remove completer syntax.
+          token = _ScrubToken(token)
           # If on word boundary or our current word is a partial match.
           if word_boundary or token.startswith(current_word):
-            if token not in self._completer_list:
-              self._completer_list.append(token)
+            _completer_set.add(token)
+      self._completer_list = list(_completer_set)
+      self._completer_list.sort()
+          
 
-    try:
+    if state < len(self._completer_list):
       return self._completer_list[state]
-    except IndexError:
-      return None
+    return None
 
-  def ParseCommands(self, commands:str) -> None:
+  def ParseCommands(self, commands: str) -> None:
     """Parses commands and executes them.
 
     Splits commands on line boundary and forwards to either the:
@@ -504,18 +475,13 @@ class TCLI(object):
       commands: String of newline separated commands.
     """
 
-    def _FlushCommands(command_list:list[str]) -> None:
-      """Submit pending commands and clear list."""
-
-      if command_list:
-        # Flush all accumulated commands beforehand.
-        # This is necessary so that recording and logging are correct.
-        logging.debug('Flush commands: %s', command_list)
-        # Pass copy rather than reference to list.
-        self.CmdRequests(self.device_list, command_list[:])
-        # Ensure list is deleted.
-        command_list[:] = []
-
+    def _Flush(devices, commands: list[str]) -> None:
+      """Flush any pending device commands for the backend."""
+      if not commands: return
+      logging.debug('Flush commands: %s', commands)
+      # Pass copy rather than reference to list.
+      self.CmdRequests(devices, commands[:])
+  
     # Split commands into list on newlines. Build new command_list.
     command_list = []
     for command in commands.split('\n'):
@@ -525,47 +491,51 @@ class TCLI(object):
 
       # TCLI commands.
       if command.startswith(SLASH):
-        _FlushCommands(command_list)
-        # Remove command prefix and submit to TCLI command interpreter.
+        _Flush(self.device_list, command_list)
+        command_list = []
+        # Remove command prefix and submit current command to TCLI interpreter.
         self.TCLICmd(command[1 :])
       else:
-        # Backend commands.
-        # Look for inline commands.
+        # Backend commands for sending to devices.
+        # Look for inline TCLI commands.
         (command_prefix, inline_commands
          ) = self.cli_parser.ExtractInlineCommands(command)
         if inline_commands:
           # Send any commands we have collecte so far.
-          _FlushCommands(command_list)
+          _Flush(self.device_list, command_list)
+          command_list = []
           # Commands with inline display modifiers are submitted
           # to a copy of the  TCLI object with the inline modifiers applied.
           logging.debug('Inline Cmd: %s.', inline_commands)
           inline_tcli = copy.copy(self)
+          inline_tcli.cli_parser.InlineOnly()
+          # Apply the inline TCLI commands to this instance.
           for cmd in inline_commands:
             inline_tcli.TCLICmd(cmd)
-          inline_tcli.ParseCommands(command_prefix)
+          inline_tcli.CmdRequests(inline_tcli.device_list, [command_prefix])
         else:
           # Otherwise continue collecting multiple commands to send at once.
           command_list.append(command)
 
-    _FlushCommands(command_list)
+    _Flush(self.device_list, command_list)
 
-  def Callback(self, response:inventory.CmdResponse) -> None:
+  def Callback(self, response: inventory.Response) -> None:
     """Async callback for device command."""
 
     with self._lock:
       logging.debug("Callback for '%s'.", response.uid)
-      # Convert from inventory specific format to a more generic dictionary.
+      # Take a response from inventory and pass it to the command_response.
       self.cmd_response.AddResponse(response)
 
       # If we have all responses for current row/command then display.
-      row = self.cmd_response.GetRow()
+      (row, pipe) = self.cmd_response.GetRow()
       while row:
-        self._FormatResponse(row[0], row[1])
-        row = self.cmd_response.GetRow()
+        self._FormatRow(row, pipe)
+        (row, pipe) = self.cmd_response.GetRow()
 
   def CmdRequests(self, device_list:list[str], command_list:list[str],
                   explicit_cmd:bool=False) -> None:
-    """Submits command list to devices and receives responses.
+    """Submits command list to devices and waits on responses.
 
     Args:
       device_list: List of strings, each string being a devicename
@@ -573,6 +543,7 @@ class TCLI(object):
       explicit_cmd: Bool, if commands submitted via '/command' or not
     """
 
+    # Log commands, even if nothing to do, dry run, or we are in safe mode.
     for buf in (self.record, self.recordall, self.log, self.logall):
       self.buffers.Append(buf, '\n'.join(command_list))
 
@@ -585,8 +556,8 @@ class TCLI(object):
       return
 
     if FLAGS.dry_run:
-      # Batch mode with dry_run set, then show what commands and devices would
-      # have been sent and return.
+      # With dry_run set, we show what devices are targets, and what commands
+      # would have been sent to them and return.
       self._Print('Send Commands: ', msgtype='title')
       self._Print('  ' + '\r  '.join(command_list))
       self._Print('To Targets: ', msgtype='title')
@@ -596,21 +567,21 @@ class TCLI(object):
     # Response requests.
     requests = []
     self.cmd_response = command_response.CmdResponse()
-    # Responses from hosts for a single command are known as a 'row'.
-    for cmd_row, command in enumerate(command_list):
+    # The set of responses for a given command is known as a 'row'.
+    for cmd_row_id, command in enumerate(command_list):
       # Split off client side pipe command.
       (command, pipe) = self.cli_parser.ExtractPipe(command)
       logging.debug("Extracted command and pipe: '%s' & '%s'.", command, pipe)
-      self.cmd_response.SetCommandRow(cmd_row, pipe)
+      self.cmd_response.InitCommandRow(cmd_row_id, pipe)
 
       # Create command requests.
-      for host in device_list:
-        req = inventory.CmdRequest(host, command, self.mode)
+      for device in device_list:
+        req = inventory.CmdRequest(device, command, self.mode)
         # Track the order that commands are submitted.
         # Responses are received in any order and
         # we use the row ID to reassemble.
         logging.debug('UID: %s.', req.uid)
-        self.cmd_response.SetRequest(cmd_row, req.uid)
+        self.cmd_response.SetRequest(cmd_row_id, req.uid)
         requests.append(req)
 
     # Submit command request to inventory manager for each host.
@@ -620,16 +591,16 @@ class TCLI(object):
     self.inventory.SendRequests(requests_callbacks, deadline=self.timeout)
 
     # Wait for all callbacks to complete.
-    # We add a 5 seconds pad to allow requests to timeout and be added to the
-    # results before cleaning up any outstanding entries and reporting results
+    # We add a 5 seconds pad to allow requests to timeout and be included in the
+    # results before cleanup and reporting results.
     if not self.cmd_response.done.wait(self.timeout +5):
-      # If we timeout then clear pending responses.
+      # If we had a timeout then clear pending responses.
       self.cmd_response = command_response.CmdResponse()
       self._Print('Timeout: timer exceeded while waiting for responses.',
                   msgtype='warning')
     logging.debug('CmdRequests: All callbacks completed.')
 
-  def TCLICmd(self, line:str) -> None:
+  def TCLICmd(self, line: str) -> None:
     f"""TCLI configuration command.
 
     Args:
@@ -665,31 +636,27 @@ class TCLI(object):
     except ValueError as error_message:
       self._Print(str(error_message), msgtype='warning')
 
-  def _FormatRaw(self, response:inventory.CmdResponse, pipe:str='') -> None:
+  def _FormatRaw(self, response: inventory.Response, pipe: str = '') -> None:
     """Display response in raw format."""
 
     # Do nothing with raw output other than tagging
     # Which device/command generated it.
-    self._Print(
-      '#!# %s:%s #!#' % (response.device_name, response.command),
-      msgtype='title')
+    self._Header(f'{response.device_name}:{response.command}')
     self._Print(self._Pipe(response.data, pipe=pipe))
 
-  def _FormatErrorResponse(self, response:inventory.CmdResponse) -> None:
+  def _FormatErrorResponse(self, response: inventory.Response) -> None:
     """Formatted error derived from response."""
 
-    self._Print('#!# %s:%s #!#\n%s' %
-      (response.device_name, response.command, response.error),
-      msgtype='warning')
+    self._Header(f'{response.device_name}:{response.command}', 'warning')
+    self._Print(response.error, 'warning')
 
-  def _FormatResponse(self, response_uid_list:list[int], pipe:str='') -> None:
-    """Display the results from a list of responses."""
+  def _FormatRow(self, response_uid_list: list[int], pipe: str = '') -> None:
+    """Display the results from a list of responses (a row)."""
 
     # Filter required if display format is not 'raw'.
     if self.display != 'raw' and not self.filter:
-      self._Print(
-        'No filter set, cannot display in %s format' % repr(self.display),
-        msgtype='warning')
+      self._Print(f"No filter set, cannot display in '{self.display}' format",
+                  'warning')
       return
 
     result = {}
@@ -715,8 +682,7 @@ class TCLI(object):
                      'Hostname': response.device_name}
 
       device = self.devices[response.device_name]
-      for attr in self.inventory.attributes:
-
+      for attr in self.inventory.attributes:                                    # type: ignore
         # Some attributes are a list rather than a string, such as flags.
         # These are not supported by Clitable attribute matching
         # and we silently drop them here.
@@ -726,9 +692,9 @@ class TCLI(object):
 
         # The filter index uses capitilised first letter for column names.
         # For some values we capitilise part of the value.
-        if self.inventory.attributes[attr].display_case == 'title':
+        if self.inventory.attributes[attr].display_case == 'title':             # type: ignore
           filter_attr[attr.title()] = getattr(device, attr).title()
-        elif self.inventory.attributes[attr].display_case == 'upper':
+        elif self.inventory.attributes[attr].display_case == 'upper':           # type: ignore
           filter_attr[attr.title()] = getattr(device, attr).upper()
         else:
           filter_attr[attr.title()] = getattr(device, attr)
@@ -753,7 +719,7 @@ class TCLI(object):
       # Is this the first line.
       if not result:
         # Print header line for this command response.
-        self._Print('#!# %s #!#' % response.command, msgtype='title')
+        self._Header(response.command)
 
       if str(self.filter_engine.header) not in result:
         # Copy initial command result, then append the rest as rows.
@@ -767,7 +733,7 @@ class TCLI(object):
         result[command_tbl].sort()
       self._DisplayTable(result[command_tbl], pipe=pipe)
 
-  def _DisplayTable(self, result:clitable.CliTable, pipe:str='') -> None:
+  def _DisplayTable(self, result: clitable.CliTable, pipe: str = '') -> None:
     """Displays output in tabular form."""
 
     if self.display == 'csv':
@@ -794,7 +760,11 @@ class TCLI(object):
       raise TcliCmdError('Unsupported display format: %s.' %
                          repr(self.display))
 
-  def _Pipe(self, output:str, pipe:str='') -> str|None:
+  def _Header(self, header: str = '', msgtype: str = 'title') -> None:
+    """Formats header string."""
+    self._Print(f'#!# {header} #!#', msgtype)
+
+  def _Pipe(self, output: str, pipe: str = '') -> str|None:
     """Creates pipe for filtering command output."""
 
     if not pipe: return output
@@ -830,7 +800,7 @@ class TCLI(object):
     # Stripped ASCII escape from here, as they are not interpreted in PY3.
     self.ParseCommands(input(PROMPT_STR))
 
-  def _BufferInUse(self, buffername:str) -> bool:
+  def _BufferInUse(self, buffername: str) -> bool:
     """Check if buffer is already being written to."""
 
     if buffername in (self.record, self.recordall, self.log, self.logall):
@@ -857,7 +827,8 @@ class TCLI(object):
   #
   # pylint: disable=unused-argument
 
-  def _CmdBuffer(self, command:str, args:list[str], append:bool=False) -> None:
+  def _CmdBuffer(
+      self, command: str, args: list[str], append: bool=False) -> None:
     """"Displays buffer contents."""
 
     # Copy buffer to local var so we capture content before adding more here.
@@ -878,7 +849,8 @@ class TCLI(object):
     """List all buffers."""
     return self.buffers.ListBuffers()
 
-  def _CmdClear(self, command:str, args:list[str], append:bool=False) -> None:
+  def _CmdClear(
+      self, command: str, args: list[str], append: bool=False) -> None:
     """Clears content of the buffer."""
     self.buffers.Clear(args[0])
 
@@ -912,7 +884,7 @@ class TCLI(object):
       self.warning_color = GROSS_WARNING_COLOR
       self.title_color = GROSS_TITLE_COLOR
 
-  def _CmdCommand(self, command:str, args:list[str], append:bool) -> None:
+  def _CmdCommand(self, command: str, args: list[str], append: bool) -> None:
     """Submit command to devices."""
     self.CmdRequests(self.device_list, [args[0]], True)
 
@@ -952,7 +924,7 @@ class TCLI(object):
           f"Unknown display '{repr(display_format)}'."
           f" Available displays are '{DISPLAY_FORMATS}'")
 
-  def _CmdEnv(self, command:str, args:list[str], append:bool) -> str:
+  def _CmdEnv(self, command: str, args: list[str], append: bool) -> str:
     """Display various environment variables."""
 
     inventory_str = ''
@@ -981,7 +953,7 @@ class TCLI(object):
       raise ValueError(error_message)
     return output
 
-  def _CmdEditor(self, command:str, args:list[str], append:bool) -> None:
+  def _CmdEditor(self, command: str, args: list[str], append: bool) -> None:
     """Edits the named buffer content."""
 
     buf = args[0]
@@ -992,7 +964,7 @@ class TCLI(object):
       buf_file.write(content.encode('ascii'))
       # Flush content so editor will see it.
       buf_file.flush()
-    #TODO(harro): Support os.getenv('EDITOR', 'vi').
+    #TODO(#39): Support os.getenv('EDITOR', 'vi').
     #TODO(harro): Maybe catch exceptions here.
     # Open file with vi.
     os.system('vi -Z -n -u NONE -U NONE -- %s' % (buf_file.name))
@@ -1007,11 +979,12 @@ class TCLI(object):
     """Exit TCLI."""
     raise EOFError()
 
-  def _CmdExpandTargets(self, command:str, args:list[str], append:bool) -> str:
+  def _CmdExpandTargets(
+      self, command: str, args: list[str], append: bool) -> str:
     return ','.join(self.device_list)
 
   def _CmdFilter(
-    self, command:str, args:list[str], append:bool) -> str|None:
+      self, command: str, args: list[str], append: bool) -> str|None:
     """Sets the clitable filter."""
 
     if not args: return 'Filter: %s' % self.filter
@@ -1023,7 +996,7 @@ class TCLI(object):
     except (clitable.CliTableError, texttable.TableError, IOError):
       raise ValueError('Invalid filter %s.' % repr(filter_name))
 
-  def _CmdHelp(self, command:str, args:list[str], append:bool):
+  def _CmdHelp(self, command: str, args: list[str], append: bool) -> str:
     """Display help."""
 
     result: list[str] = []
@@ -1036,14 +1009,14 @@ class TCLI(object):
         f'{cmd_name}{append_str}{arg} {cmd_obj.help_str}')
     return '\n\n'.join(result)
 
-  def _CmdInventory(self, command:str, args:list[str], append:bool) -> str:
+  def _CmdInventory(self, command: str, args: list[str], append: bool) -> str:
     """Displays devices in target list."""
 
     dlist = []
     for device_name in self.device_list:
       device = self.devices[device_name]
       attr_list = [device_name]
-      for name in self.inventory.attributes:
+      for name in self.inventory.attributes:                                    # type: ignore
         if name == 'flags': continue
         if not getattr(device, name): continue
         attr_list.append(f'{name.title()}:{str(getattr(device, name)) or ''}')
@@ -1054,7 +1027,8 @@ class TCLI(object):
       dlist.append(', '.join(attr_list))
     return '\n'.join(dlist)
 
-  def _CmdLogging(self, command:str, args:list[str], append:bool) -> str|None:
+  def _CmdLogging(
+      self, command: str, args: list[str], append: bool) -> str|None:
     """Activates one of the various logging functions."""
 
     # If no arg then display what buffer is currently active.
@@ -1096,7 +1070,7 @@ class TCLI(object):
         f"Unknown mode {repr(mode)}. Available modes are '{MODE_FORMATS}'")
     self.mode = mode
 
-  def _CmdPlay(self, command:str, args:list[str], append:bool) -> None:
+  def _CmdPlay(self, command: str, args: list[str], append: bool) -> None:
     """Plays out buffer contents to TCLI."""
 
     if self.playback is not None:
@@ -1114,7 +1088,7 @@ class TCLI(object):
         self._Print(f"Nonexistent buffer: '{buf}'.", msgtype='warning')
       self.playback = None
 
-  def _CmdRead(self, command:str, args:list[str], append:bool) -> str:
+  def _CmdRead(self, command: str, args: list[str], append: bool) -> str:
     """"Write buffer content to file."""
 
     buf = args[0]
@@ -1137,7 +1111,8 @@ class TCLI(object):
     buf_file.close()
     return f"{self.buffers.GetBuffer(buf).count('\n')} lines read."
 
-  def _CmdTimeout(self, command:str, args:list[str], append:bool) -> str|None:
+  def _CmdTimeout(
+      self, command: str, args: list[str], append: bool) -> str|None:
     """Sets or display the timeout setting."""
 
     if not args: return f'Timeout: {self.timeout}'
@@ -1151,9 +1126,9 @@ class TCLI(object):
     except ValueError:
       raise ValueError('Invalid timeout value %s.' % repr(args[0]))
 
-  #TODO(harro): Add flag to disable being able to write to file.
+  #TODO(#40): Add flag to disable/block being able to write to file.
   def _CmdWrite(
-    self, command:str, args:list[str], append:bool) -> str:
+      self, command: str, args: list[str], append: bool) -> str:
     """Writes out buffer content to file."""
 
     content = self.buffers.GetBuffer(args[0])
@@ -1176,7 +1151,8 @@ class TCLI(object):
 
     return f"{content.count('\n')} lines written."
 
-  def _CmdToggleValue(self, command:str, args:list[str], append:bool) -> None:
+  def _CmdToggleValue(
+      self, command: str, args: list[str], append: bool) -> None:
     """Commands that can 'toggle' their value."""
 
     if not args:
@@ -1218,5 +1194,3 @@ class TCLI(object):
     else:
       print(msg)
 
-  devices = property(lambda self: self.inventory.devices)
-  device_list = property(lambda self: self.inventory.device_list)
