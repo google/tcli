@@ -3,15 +3,15 @@
 > Forked from <https://github.com/google/tcli> - as that repo is archived.
 >
 > TCLI was a starter project at Google back in 2008. Although a powerful tool for network
-> troubleshooting, and popular within Google for over a decade, it is accidental code lacking in
-> software design. The fork here may add little in the way of functionality, it does however slay a
+> troubleshooting, and popular within Google for over a decade, it was accidental code lacking in
+> software design. This fork may add little in the way of functionality, it does however slay a
 > few of those dragons.
 
 ## Overview
 
 TCLI is a client interface for issuing commands to arbitrarily large numbers of devices
-(hundreds, thousands, even hundreds of thousands). It supports a rich set of interactive functions
-and can collate responses into various tabular display formats.
+(hundreds, thousands, even hundreds of thousands). TCLI is a frontend to TextFSM and adds a
+rich set of interactive functions and collates responses into various tabular display formats.
 
 An essential tool for scaling network administration when device access is required via CLI.
 The cross section of devices to receive commands is controlled by matching on device names or
@@ -27,10 +27,31 @@ outputs for offline use with near-realtime data.
 See the [TCLI Power Users Guide](https://github.com/harro/tcli/wiki/TCLI-Power-Users-Guide) for how
 to make use of the interactive CLI functionality.
 
+Type ```/help``` to get started. TCLI commands are prefixed with a forward slash ```/```.
+All other commands are forwarded to the target device/s for remote execution.
+
+Pipes are supported locally in the client with double piping ```||``` . e.g.
+```show inter terse | grep ge || wc -l```
+Sends 'show inter terse | grep ge' to the target devices and pipes the result through ```wc -l```
+locally in the TCLI host.
+
+Inline commands are supported with double slash ```//```. e.g.
+```show version //display csv //color on```
+
+Returns the output of the 'show version' in csv format, with color still on,
+regardless of what the global setting are. Global settings are not changed
+by inline commands.
+
+Commands can be passed to the host shell with ```/!``` or ```/exec```.
+
+The file ```~/.tclirc``` is executed at startup.
+
+Interactive TCLI starts in 'safe mode' - toggle off with ```/S``` or ```/safemode```.
+
 ## Cautions and Caveats
 
 Empowers users to run commands across potentially large sets of devices with very few restrictions –
-please use wisely and cautiously.
+Exercise caution against 'overmatching' with your target and attribute filters and please use wisely and cautiously.
 
 Does not support commands that are multi-part, or have non-discrete responses
 e.g. the **ping** command.

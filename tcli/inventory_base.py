@@ -425,7 +425,7 @@ class Inventory(object):
     """Updates or displays target device inventory filter.
 
     Args:
-      command_name: Command entered by the user (minus tilde prefix).
+      command_name: Command entered by the user (minus slash prefix).
       args: list of positional args after the command.
       append: bool indicating that filters args are to be appended.
     Returns:
@@ -478,7 +478,7 @@ class Inventory(object):
     """Updates or displays maxtargets filter.
 
     Args:
-      command_name: str command name entered by user (minus tilde prefix).
+      command_name: str command name entered by user (minus slash prefix).
       args: list of positional args.
       append: bool indicating that command had a suffix to append data.
     Returns:

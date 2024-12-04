@@ -14,30 +14,9 @@
 
 """TCLI - Tokenised CLI for accessing command driven devices.
 
-TCLI is a frontend to TextFSM that adds interactive execution of commands on
-multiple target devices and returns the results in one of several formats.
-
-Type '%shelp' to get started. All TCLI commands are prefixed with a '%s'.
-All other commands are forwarded to the target device/s for execution.
-
-Pipes are supported locally in the client with '||' double piping.
-  e.g. 'show inter terse | grep ge || wc -l'
-Sends 'show inter terse | grep ge' to the targets and pipes the result
-through 'wc -l' locally in the tcli client.
-
-Inline commands are supported with '%s%s'.
-  e.g 'show version %s%sdisplay csv %s%scolor on
-Returns the output of the'show version' in csv format, with color still on,
-regardless of what the global setting are. Global settings are not changed
-by inline commands.
-
-Commands can be passed to the client shell with '%s!' or '%sexec'.
-
-The file '~/.tclirc' is executed at startup.
-
-Exercise caution against 'overmatching' with your target and attribute filters.
-
-Interactive TCLI starts in 'safe mode' - toggle off with '%sS' or '%ssafemode'.
+This librray handles initialising the inventory, executing the RC file,
+parsing the command inputs supplied by the user, forwarding to the accessor
+and displaying the results received from accessor for said remote devices.
 """
 
 import copy
@@ -57,6 +36,7 @@ try:
 except(ImportError):
   import readline
 
+from tcli import command_completer as completer
 from tcli import command_parser
 from tcli import command_register
 from tcli import command_response
@@ -197,7 +177,6 @@ class TCLI(object):
 
     # Async callback.
     self._lock = threading.Lock()
-    self._completer_list: list[str] = []
     self.interactive = interactive
     self.inventory = inventory
     self.filter_engine = None
@@ -234,7 +213,7 @@ class TCLI(object):
       # Apply user settings.
       self._ParseRCFile()
     if commands:
-      self.ParseCommands(commands)
+      self._ParseCommands(commands)
 
   def __copy__(self) -> "TCLI":
     """Copies attributes from self to new tcli object."""
@@ -268,68 +247,6 @@ class TCLI(object):
   devices = property(lambda self: self.inventory.devices)
   device_list = property(lambda self: self.inventory.device_list)
 
-  def Motd(self) ->None:
-    """Display message of the day."""
-    self._Print(MOTD, msgtype='system')
-
-  def _SetPrompt(self, inv: inventory.Inventory) -> None:
-    """Sets the prompt string with current targets."""
-
-    safe = '*' if self.safemode else ''
-
-    # Truncate prompt if too long to fit in terminal.
-    (_, width) = terminal.TerminalSize()
-    # Render, without replacing, the prompt to see if it will fit on a row.
-    # Drop the target_str if that is not the case.
-    if (len(PROMPT_HDR % (inv.targets, len(self.device_list), safe)) > width):
-      target_str = '#####'
-    else:
-      target_str = inv.targets
-
-    self.prompt = PROMPT_HDR % (
-      terminal.AnsiText(target_str, self.system_color),
-      terminal.AnsiText(len(self.device_list), self.warning_color),
-      terminal.AnsiText(safe, self.title_color))
-
-  def _InitInventory(self) -> None:
-    """Inits inventory and triggers async load of device data."""
-
-    try:
-      self.inventory = inventory.Inventory()
-      # Add additional command support for Inventory library.
-      self.inventory.RegisterCommands(self.cli_parser)
-      self.inventory.SetFiltersFromDefaults(self.cli_parser)
-    except inventory.AuthError as error_message:
-      self._Print(str(error_message), msgtype='warning')
-      raise inventory.AuthError()
-
-  def _ParseRCFile(self) -> None:
-    """Reads and execs the rc file.
-
-      If present, it will be read into buffer 'startup', then
-      'play'ed.
-
-      A missing non-default file will raise an exception,
-      but a missing default file will be silently ignored.
-
-    Raises:
-      EOFError: If unable to open the run command file.
-    """
-
-    if FLAGS.config_file.lower() != 'none':
-      try:
-        config_file = open(FLAGS.config_file)
-        self.buffers.Append('startup', config_file.read())
-        self.ParseCommands(self.buffers.GetBuffer('startup'))
-      except IOError:
-        # Silently fail if we don't find a file in the default location.
-        # Warn the user if they supplied a file explicitly.
-        if FLAGS.config_file != DEFAULT_CONFIGFILE:
-          self._Print(
-              'Error: Reading config file: %s' % sys.exc_info()[1],
-              msgtype='warning')
-          raise EOFError()
-
   # pylint: disable=unused-argument
   def Completer(self, word: str, state: int) -> str|None:
     """Command line completion used by readline library."""
@@ -341,186 +258,48 @@ class TCLI(object):
     full_line = readline.get_line_buffer().lstrip()                             # type: ignore
 
     if full_line and full_line.startswith(SLASH):
-      # Drop the slash before passing the command.
-      return self._TildeCompleter(full_line[1:], state)
+      if not self.cli_parser: return None
+      # Return completions for matching TCLI commands.
+      return completer.TCLICompleter(full_line, state, self.cli_parser)
 
     # If not a TCLI command, or an empty prompt, then return completions for 
     # known remote device commands that we support with TextFSM.
-    return self._CmdCompleter(full_line, state)
+    if not self.filter_engine: return None
+    return completer.CmdCompleter(full_line, state, self.filter_engine)
 
-  def _TildeCompleter(self, full_line: str, state: int) -> str|None:
-    """Command line completion for escape commands."""
+  def Motd(self) ->None:
+    """Display message of the day."""
+    self._Print(MOTD, msgtype='system')
 
-    completer_list = []
-    # We have a complete TCLI command.
-    # Ignore get_completer_delims, we only use spaces as separators.
-    if ' ' in full_line:
-      word_sep = full_line.index(' ')         # Word boundary.
-      (cmd_name, arg_string) = (full_line[:word_sep], full_line[word_sep +1:])
+  def Prompt(self) -> None:
+    """Present prompt for further input."""
 
-      # If we have a shortname, expand it before continuing.
-      if len(cmd_name) == 1:
-        for cname in self.cli_parser:
-          if self.cli_parser[cname].short_name is cmd_name:
-            cmd_name = cname
+    # Clear response dictionary to ignore outstanding requests.
+    self.cmd_response = command_response.CmdResponse()
+    self._SetPrompt()
+    # Print the main prompt, so the ASCII escape sequences work.
+    print(self.prompt)
+    # Stripped ASCII escape from here, as they are not interpreted in PY3.
+    self._ParseCommands(input(PROMPT_STR))
 
-      # Compare the subsequent arguments with the specific command completer.
-      if cmd_name in self.cli_parser:
-        for arg_option in self.cli_parser[cmd_name].completer():
-          if arg_option.startswith(arg_string):
-            completer_list.append(arg_option)
+  def _BufferInUse(self, buffername: str) -> bool:
+    """Check if buffer is already being written to."""
 
-      if state < len(completer_list):
-        return completer_list[state]
-      return None
+    if buffername in (self.record, self.recordall, self.log, self.logall):
+      self._Print(
+        f"Buffer: '{buffername}', already open for writing.", msgtype='warning')
+      return True
 
-    # Partial, or whole command word with no arguments.
-    for cmd_name in self.cli_parser:
-      if cmd_name.startswith(full_line):
-        completer_list.append(cmd_name)
-        if (cmd_name in self.cli_parser and self.cli_parser[cmd_name].append):
-          # Add the apend option of the command to the list
-          completer_list.append(cmd_name + command_parser.APPEND)
-    completer_list.sort()
+    if buffername == self.playback:
+      self._Print(
+        f"Buffer: '{self.playback}', already open by 'play' command.",
+        msgtype='warning')
+      return True
 
-    if state < len(completer_list):
-      # Re-apply TILDE to completion.
-      return SLASH + completer_list[state]
-    return None
+    return False
 
-  def _CmdCompleter(self, full_line: str, state: int) -> str|None:
-    """Commandline completion used by readline library."""
-
-
-    def _ScrubToken(token: str) -> str:
-      """Remove nested (...)? from command completion string."""
-      # This could break legitimate regexps but since these are completion
-      # candidates, That breakage is cosmetic.
-      _reg_exp_str = r'\((?P<value>.*)\)\?'
-      clean_token = re.sub(_reg_exp_str, '\g<value>', token)                    # type: ignore
-      # Repeat until all nested (...)? are removed.
-      while token != clean_token:
-        token = clean_token
-        clean_token = re.sub(_reg_exp_str, '\g<value>', clean_token)            # type: ignore
-      return token
-
-    # First invocation, so build candidate list and cache for re-use.
-    if state == 0:
-      _completer_set = set()
-      current_word = ''
-      line_tokens = []
-      word_boundary = False
-      # What has been typed so far.
-
-      # Collapse quotes to remove any whitespace within.
-      cleaned_line = re.sub(r'\".+\"', '""', full_line)
-      cleaned_line = re.sub(r'\'.+\'', '""', cleaned_line)
-      # Remove double spaces etc
-      cleaned_line = re.sub(r'\s+', ' ', cleaned_line)
-
-      # Are we part way through typing a word, or a word boundary.
-      if cleaned_line and cleaned_line.endswith(' '):
-        word_boundary = True
-
-      cleaned_line = cleaned_line.rstrip()
-      # If a blank line then this is also a word boundary.
-      if not cleaned_line:
-        word_boundary = True
-      else:
-        # Split into word tokens.
-        line_tokens = cleaned_line.split(' ')
-        # If partially through typing a word then don't include it as a token.
-        if not word_boundary and line_tokens:
-          current_word = line_tokens.pop()
-
-      # Compare with table of possible command matches in filter_engine.
-      if self.filter_engine:
-        for row in self.filter_engine.index.index:                              # type: ignore
-          # Split the command match into tokens.
-          cmd_tokens = row['Command'].split(' ')
-          # Does the line match the partial list of tokens.
-          if not line_tokens and cmd_tokens:
-            # Currently a blank line so the first token is what we want.
-            token = cmd_tokens[0]
-          # Does our line match this command completion candidate.
-          elif (
-            len(cmd_tokens) > len(line_tokens) and
-            re.match(' '.join(cmd_tokens[:len(line_tokens)]), cleaned_line)):
-            # Take the token from off the end of the Completer command.
-            token = cmd_tokens[len(line_tokens)]
-          else:
-            continue
-  
-          # We have found a match. Remove completer syntax.
-          token = _ScrubToken(token)
-          # If on word boundary or our current word is a partial match.
-          if word_boundary or token.startswith(current_word):
-            _completer_set.add(token)
-      self._completer_list = list(_completer_set)
-      self._completer_list.sort()
-          
-
-    if state < len(self._completer_list):
-      return self._completer_list[state]
-    return None
-
-  def ParseCommands(self, commands: str) -> None:
-    """Parses commands and executes them.
-
-    Splits commands on line boundary and forwards to either the:
-      - TildeCmd the method for resolving TCLI commands.
-      - CmdRequests the method for sending commands to the backend.
-
-    Args:
-      commands: String of newline separated commands.
-    """
-
-    def _Flush(devices, commands: list[str]) -> None:
-      """Flush any pending device commands for the backend."""
-      if not commands: return
-      logging.debug('Flush commands: %s', commands)
-      # Pass copy rather than reference to list.
-      self.CmdRequests(devices, commands[:])
-  
-    # Split commands into list on newlines. Build new command_list.
-    command_list = []
-    for command in commands.split('\n'):
-      command = command.strip()
-      # Skip blank lines.
-      if not command: continue
-
-      # TCLI commands.
-      if command.startswith(SLASH):
-        _Flush(self.device_list, command_list)
-        command_list = []
-        # Remove command prefix and submit current command to TCLI interpreter.
-        self.TCLICmd(command[1 :])
-      else:
-        # Backend commands for sending to devices.
-        # Look for inline TCLI commands.
-        (command_prefix, inline_commands
-         ) = self.cli_parser.ExtractInlineCommands(command)
-        if inline_commands:
-          # Send any commands we have collecte so far.
-          _Flush(self.device_list, command_list)
-          command_list = []
-          # Commands with inline display modifiers are submitted
-          # to a copy of the  TCLI object with the inline modifiers applied.
-          logging.debug('Inline Cmd: %s.', inline_commands)
-          inline_tcli = copy.copy(self)
-          inline_tcli.cli_parser.InlineOnly()
-          # Apply the inline TCLI commands to this instance.
-          for cmd in inline_commands:
-            inline_tcli.TCLICmd(cmd)
-          inline_tcli.CmdRequests(inline_tcli.device_list, [command_prefix])
-        else:
-          # Otherwise continue collecting multiple commands to send at once.
-          command_list.append(command)
-
-    _Flush(self.device_list, command_list)
-
-  def Callback(self, response: inventory.Response) -> None:
-    """Async callback for device command."""
+  def _Callback(self, response: inventory.Response) -> None:
+    """Async callback called on each device response received."""
 
     with self._lock:
       logging.debug("Callback for '%s'.", response.uid)
@@ -533,7 +312,7 @@ class TCLI(object):
         self._FormatRow(row, pipe)
         (row, pipe) = self.cmd_response.GetRow()
 
-  def CmdRequests(self, device_list:list[str], command_list:list[str],
+  def _CmdRequests(self, device_list:list[str], command_list:list[str],
                   explicit_cmd:bool=False) -> None:
     """Submits command list to devices and waits on responses.
 
@@ -584,8 +363,8 @@ class TCLI(object):
         self.cmd_response.SetRequest(cmd_row_id, req.uid)
         requests.append(req)
 
-    # Submit command request to inventory manager for each host.
-    requests_callbacks = [(req, self.Callback) for req in requests]
+    # Submit command request to inventory manager for each device.
+    requests_callbacks = [(req, self._Callback) for req in requests]
     # Setup progress indicator.
     self.cmd_response.StartIndicator()
     self.inventory.SendRequests(requests_callbacks, deadline=self.timeout)
@@ -600,43 +379,35 @@ class TCLI(object):
                   msgtype='warning')
     logging.debug('CmdRequests: All callbacks completed.')
 
-  def TCLICmd(self, line: str) -> None:
-    f"""TCLI configuration command.
+  def _DisplayFormatted(
+      self, result: clitable.CliTable, pipe: str = '') -> None:
+    """Displays output in tabular form."""
 
-    Args:
-      line: String command for TCLI parsing. Minus the {SLASH} escape prefix.
+    if self.display == 'csv':
+      self._Print(self._Pipe(str(result), pipe=pipe))
 
-    Raises:
-      EOFError: If exit is issued.
-    """
+    elif self.display == 'nvp':
+      # 'Host' is added to the LABEL prefix.
+      result.AddKeys(['Host'])
+      self._Print(self._Pipe(result.LabelValueTable(), pipe=pipe))
 
-    # Command parsing
-    try:
-      (command, args, append) = self.cli_parser.ParseCommandLine(line)
-    except ParseError as error_message:
-      self._Print(str(error_message), msgtype='warning')
-      return
+    elif self.display == 'tbl':
+      (_, width) = terminal.TerminalSize()
+      try:
+        self._Print(self._Pipe(result.FormattedTable(width), pipe=pipe))
+      except TableError as error_message:
+        width *= 2
+        # Try again allowing text to wrap once.
+        try:
+          self._Print(self._Pipe(result.FormattedTable(width), pipe=pipe))
+        except TableError as error_message:
+          self._Print(str(error_message), msgtype='warning')
+    else:
+      # Problem with parsing of display command if we reach here.
+      raise TcliCmdError('Unsupported display format: %s.' %
+                         repr(self.display))
 
-    # Command logging.
-    # Don't log 'help' command and output.
-    if command != 'help':
-      # The command is valid so we can log it.
-      for buf in (self.recordall, self.logall):
-        # Don't log a logstop|recordstop' to a buffer as we stop logging.
-        if command in ('recordstop', 'logstop') and args and args[0] == buf:
-          continue
-        # Add back the command prefix for the logs.
-        self.buffers.Append(buf, SLASH + line)
-
-    # Command execution.
-    try:
-      result = self.cli_parser.ExecHandler(command, args, append)
-      if result: self._Print(result, msgtype='system')
-    # pylint: disable=broad-except
-    except ValueError as error_message:
-      self._Print(str(error_message), msgtype='warning')
-
-  def _FormatRaw(self, response: inventory.Response, pipe: str = '') -> None:
+  def _DisplayRaw(self, response: inventory.Response, pipe: str = '') -> None:
     """Display response in raw format."""
 
     # Do nothing with raw output other than tagging
@@ -674,7 +445,7 @@ class TCLI(object):
         continue
 
       if self.display == 'raw':
-        self._FormatRaw(response, pipe=pipe)
+        self._DisplayRaw(response, pipe=pipe)
         continue
 
       # Build a CliTable attribute filter from the response.
@@ -709,7 +480,7 @@ class TCLI(object):
                       response.device_name)
         self._Print(error_message, msgtype='warning')
         # If unable to parse then output as raw.
-        self._FormatRaw(response, pipe=pipe)
+        self._DisplayRaw(response, pipe=pipe)
         continue
 
       # Add host column to row, as single table may have
@@ -731,38 +502,105 @@ class TCLI(object):
     for command_tbl in result:
       if FLAGS.sorted:
         result[command_tbl].sort()
-      self._DisplayTable(result[command_tbl], pipe=pipe)
-
-  def _DisplayTable(self, result: clitable.CliTable, pipe: str = '') -> None:
-    """Displays output in tabular form."""
-
-    if self.display == 'csv':
-      self._Print(self._Pipe(str(result), pipe=pipe))
-
-    elif self.display == 'nvp':
-      # 'Host' is added to the LABEL prefix.
-      result.AddKeys(['Host'])
-      self._Print(self._Pipe(result.LabelValueTable(), pipe=pipe))
-
-    elif self.display == 'tbl':
-      (_, width) = terminal.TerminalSize()
-      try:
-        self._Print(self._Pipe(result.FormattedTable(width), pipe=pipe))
-      except TableError as error_message:
-        width *= 2
-        # Try again allowing text to wrap once.
-        try:
-          self._Print(self._Pipe(result.FormattedTable(width), pipe=pipe))
-        except TableError as error_message:
-          self._Print(str(error_message), msgtype='warning')
-    else:
-      # Problem with parsing of display command if we reach here.
-      raise TcliCmdError('Unsupported display format: %s.' %
-                         repr(self.display))
+      self._DisplayFormatted(result[command_tbl], pipe=pipe)
 
   def _Header(self, header: str = '', msgtype: str = 'title') -> None:
     """Formats header string."""
     self._Print(f'#!# {header} #!#', msgtype)
+
+  def _InitInventory(self) -> None:
+    """Inits inventory and triggers async load of device data."""
+
+    try:
+      self.inventory = inventory.Inventory()
+      # Add additional command support for Inventory library.
+      self.inventory.RegisterCommands(self.cli_parser)
+      self.inventory.SetFiltersFromDefaults(self.cli_parser)
+    except inventory.AuthError as error_message:
+      self._Print(str(error_message), msgtype='warning')
+      raise inventory.AuthError()
+
+  def _ParseCommands(self, commands: str) -> None:
+    """Parses commands and executes them.
+
+    Splits commands on line boundary and forwards to either the:
+      - TCLICmd the method for resolving TCLI commands.
+      - CmdRequests the method for sending commands to the backend.
+
+    Args:
+      commands: String of newline separated commands.
+    """
+
+    def _Flush(devices, commands: list[str]) -> None:
+      """Flush any pending device commands for the backend."""
+      if not commands: return
+      logging.debug('Flush commands: %s', commands)
+      # Pass copy rather than reference to list.
+      self._CmdRequests(devices, commands[:])
+  
+    # Split commands into list on newlines. Build new command_list.
+    command_list = []
+    for command in commands.split('\n'):
+      command = command.strip()
+      # Skip blank lines.
+      if not command: continue
+
+      # TCLI commands.
+      if command.startswith(SLASH):
+        _Flush(self.device_list, command_list)
+        command_list = []
+        # Remove command prefix and submit current command to TCLI interpreter.
+        self._TCLICmd(command[1 :])
+      else:
+        # Backend commands for sending to devices.
+        # Look for inline TCLI commands.
+        (command_prefix, inline_commands
+         ) = self.cli_parser.ExtractInlineCommands(command)
+        if inline_commands:
+          # Send any commands we have collecte so far.
+          _Flush(self.device_list, command_list)
+          command_list = []
+          # Commands with inline display modifiers are submitted
+          # to a copy of the  TCLI object with the inline modifiers applied.
+          logging.debug('Inline Cmd: %s.', inline_commands)
+          inline_tcli = copy.copy(self)
+          inline_tcli.cli_parser.InlineOnly()
+          # Apply the inline TCLI commands to this instance.
+          for cmd in inline_commands:
+            inline_tcli._TCLICmd(cmd)
+          inline_tcli._CmdRequests(inline_tcli.device_list, [command_prefix])
+        else:
+          # Otherwise continue collecting multiple commands to send at once.
+          command_list.append(command)
+
+    _Flush(self.device_list, command_list)
+
+  def _ParseRCFile(self) -> None:
+    """Reads and execs the rc file.
+
+      If present, it will be read into buffer 'startup', then
+      'play'ed.
+
+      A missing non-default file will raise an exception,
+      but a missing default file will be silently ignored.
+
+    Raises:
+      EOFError: If unable to open the run command file.
+    """
+
+    if FLAGS.config_file.lower() != 'none':
+      try:
+        config_file = open(FLAGS.config_file)
+        self.buffers.Append('startup', config_file.read())
+        self._ParseCommands(self.buffers.GetBuffer('startup'))
+      except IOError:
+        # Silently fail if we don't find a file in the default location.
+        # Warn the user if they supplied a file explicitly.
+        if FLAGS.config_file != DEFAULT_CONFIGFILE:
+          self._Print(
+              'Error: Reading config file: %s' % sys.exc_info()[1],
+              msgtype='warning')
+          raise EOFError()
 
   def _Pipe(self, output: str, pipe: str = '') -> str|None:
     """Creates pipe for filtering command output."""
@@ -788,33 +626,82 @@ class TCLI(object):
       logging.error('IOerror writing/reading from pipe.')
       return
 
-  def Prompt(self) -> None:
-    """Present prompt for further input."""
+  def _Print(self, msg, msgtype='default') ->str|None:
+    """Prints (and logs) outputs."""
 
-    # Clear response dictionary to ignore outstanding requests.
-    self.cmd_response = command_response.CmdResponse()
+    if not msg: return
+
+    # Capture output in logs.
+    for buf in (self.logall,):
+      self.buffers.Append(buf, msg)
+
+    # Format for width of display.
+    if self.linewrap: msg = terminal.LineWrap(msg)
+    # Colourise depending on nature of message.
+    if self.color:
+      msg_color = f'{msgtype}_color'
+      if hasattr(self, msg_color) and type(getattr(self, msg_color) is str):
+        msg = terminal.AnsiText(msg, getattr(self, msg_color))
+    # Warnings go to stderr.
+    if msgtype == 'warning':
+      print(msg, file=sys.stderr)
+    else:
+      print(msg)
+
+  def _SetPrompt(self) -> None:
+    """Sets the prompt string with current targets."""
+
+    safe = '*' if self.safemode else ''
+
+    # Truncate prompt if too long to fit in terminal.
+    target_str = '#####'
+    (_, width) = terminal.TerminalSize()
+    # Expand the targets displayed in prompt, if it fits in the terminal.
     if self.inventory:
-      self._SetPrompt(self.inventory)
-    # Print the main prompt, so the ASCII escape sequences work.
-    print(self.prompt)
-    # Stripped ASCII escape from here, as they are not interpreted in PY3.
-    self.ParseCommands(input(PROMPT_STR))
+      if (width > len(
+        PROMPT_HDR % (self.inventory.targets, len(self.device_list), safe))):
+        target_str = self.inventory.targets
 
-  def _BufferInUse(self, buffername: str) -> bool:
-    """Check if buffer is already being written to."""
+    self.prompt = PROMPT_HDR % (
+      terminal.AnsiText(target_str, self.system_color),
+      terminal.AnsiText(len(self.device_list), self.warning_color),
+      terminal.AnsiText(safe, self.title_color))
 
-    if buffername in (self.record, self.recordall, self.log, self.logall):
-      self._Print(
-        f"Buffer: '{buffername}', already open for writing.", msgtype='warning')
-      return True
+  def _TCLICmd(self, line: str) -> None:
+    f"""TCLI configuration command.
 
-    if buffername == self.playback:
-      self._Print(
-        f"Buffer: '{self.playback}', already open by 'play' command.",
-        msgtype='warning')
-      return True
+    Args:
+      line: String command for TCLI parsing. Minus the {SLASH} escape prefix.
 
-    return False
+    Raises:
+      EOFError: If exit is issued.
+    """
+
+    # Command parsing
+    try:
+      (command, args, append) = self.cli_parser.ParseCommandLine(line)
+    except ParseError as error_message:
+      self._Print(str(error_message), msgtype='warning')
+      return
+
+    # Command logging.
+    # Don't log 'help' command and output.
+    if command != 'help':
+      # The command is valid so we can log it.
+      for buf in (self.recordall, self.logall):
+        # Don't log a logstop|recordstop' to a buffer as we stop logging.
+        if command in ('recordstop', 'logstop') and args and args[0] == buf:
+          continue
+        # Add back the command prefix for the logs.
+        self.buffers.Append(buf, SLASH + line)
+
+    # Command execution.
+    try:
+      result = self.cli_parser.ExecHandler(command, args, append)
+      if result: self._Print(result, msgtype='system')
+    # pylint: disable=broad-except
+    except ValueError as error_message:
+      self._Print(str(error_message), msgtype='warning')
 
   ##############################################################################
   # Registered Commands.                                                       #
@@ -886,7 +773,7 @@ class TCLI(object):
 
   def _CmdCommand(self, command: str, args: list[str], append: bool) -> None:
     """Submit command to devices."""
-    self.CmdRequests(self.device_list, [args[0]], True)
+    self._CmdRequests(self.device_list, [args[0]], True)
 
   def _CmdDefaults(
       self, command:str, args:list[str], append:bool=False) -> str|None:
@@ -1083,7 +970,7 @@ class TCLI(object):
       self.playback = buf
       try:
         content = self.buffers.GetBuffer(buf)
-        self.ParseCommands(content)
+        self._ParseCommands(content)
       except(AttributeError):
         self._Print(f"Nonexistent buffer: '{buf}'.", msgtype='warning')
       self.playback = None
@@ -1126,6 +1013,22 @@ class TCLI(object):
     except ValueError:
       raise ValueError('Invalid timeout value %s.' % repr(args[0]))
 
+  def _CmdToggleValue(
+      self, command: str, args: list[str], append: bool) -> None:
+    """Commands that can 'toggle' their value."""
+
+    if not args:
+      # Toggle the current value if new value unspecified
+      setattr(self, command, not getattr(self, command))
+      return
+
+    value = args[0].lower()
+    if value not in ('on', 'true', 'off', 'false'):
+      raise ValueError("Error: Argument must be 'on' or 'off'.")
+
+    if value in ('on', 'true'): setattr(self, command, True)
+    elif value in ('off', 'false'): setattr(self, command, False)
+
   #TODO(#40): Add flag to disable/block being able to write to file.
   def _CmdWrite(
       self, command: str, args: list[str], append: bool) -> str:
@@ -1150,47 +1053,8 @@ class TCLI(object):
       raise ValueError(str(error_message))
 
     return f"{content.count('\n')} lines written."
-
-  def _CmdToggleValue(
-      self, command: str, args: list[str], append: bool) -> None:
-    """Commands that can 'toggle' their value."""
-
-    if not args:
-      # Toggle the current value if new value unspecified
-      setattr(self, command, not getattr(self, command))
-      return
-
-    value = args[0].lower()
-    if value not in ('on', 'true', 'off', 'false'):
-      raise ValueError("Error: Argument must be 'on' or 'off'.")
-
-    if value in ('on', 'true'): setattr(self, command, True)
-    elif value in ('off', 'false'): setattr(self, command, False)
-
+  
   # pylint: enable=unused-argument
   ##############################################################################
   # End of command handles.                                                    #
   ##############################################################################
-
-  def _Print(self, msg, msgtype='default') ->str|None:
-    """Prints (and logs) outputs."""
-
-    if not msg: return
-
-    # Capture output in logs.
-    for buf in (self.logall,):
-      self.buffers.Append(buf, msg)
-
-    # Format for width of display.
-    if self.linewrap: msg = terminal.LineWrap(msg)
-    # Colourise depending on nature of message.
-    if self.color:
-      msg_color = f'{msgtype}_color'
-      if hasattr(self, msg_color) and type(getattr(self, msg_color) is str):
-        msg = terminal.AnsiText(msg, getattr(self, msg_color))
-    # Warnings go to stderr.
-    if msgtype == 'warning':
-      print(msg, file=sys.stderr)
-    else:
-      print(msg)
-

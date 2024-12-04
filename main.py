@@ -12,7 +12,7 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
-"""Executable for TCLI."""
+"""Executable for TCLI. Sets up command completion and then prompts the user."""
 
 import importlib
 import sys
@@ -28,12 +28,12 @@ flags.DEFINE_string(
     Commands (newline separated) to send to devices in the target list.
     'Prompting' commands, commands that request further input from the
     user before completing are discouraged and will fail.
-
-    Examples to avoid: telnet, ping, reload.""", short_name='C')
+    Examples to avoid: telnet, ping, reload.
+    Shortname: 'C'.""", short_name='C')
 flags.DEFINE_boolean(
-  'interactive', False,
-  'TCLI runs in interactive mode. This is the default mode if no'
-  ' cmds are supplied.\n', short_name='I')
+  'interactive', False, """
+    TCLI runs in interactive mode. This is the default if no cmds are supplied.'
+    Shortname: 'I'.""", short_name='I')
 # Defaults to inventory_csv.py which contains canned data for testing.
 flags.DEFINE_string('inventory_file', 'inventory_csv',
                     'Name of the  module that implements the Inventory class.')

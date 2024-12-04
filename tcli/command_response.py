@@ -30,7 +30,7 @@ class CmdResponse(object):
 
   The command string itself is not handled here. Rather we have a unique ID(uid)
   that corresponds to a command sent. So here we track the number of commands
-  sent (row numbers) and the number of hosts the command was issued to. When
+  sent (row numbers) and the number of devices the command was issued to. When
   all responses are returned for the current row then a call to GetRow returns
   it.
 

@@ -70,16 +70,16 @@ class UnitTestTCLIEndToEnd(unittest.TestCase):
       self.assertEqual('abuffer', tcli_obj.log)
       # Safe mode starts on in interactive mode, toggle it off here.
       self.assertTrue(tcli_obj.safemode)
-      tcli_obj.ParseCommands('/S')
+      tcli_obj._ParseCommands('/S')
       self.assertFalse(tcli_obj.safemode)
-      tcli_obj.ParseCommands('/D csv')
+      tcli_obj._ParseCommands('/D csv')
       self.assertEqual('csv', tcli_obj.display)
       # Issue some commands interactively.
-      tcli_obj.ParseCommands('/T ^device_.*')
-      tcli_obj.ParseCommands('/X device_c')
+      tcli_obj._ParseCommands('/T ^device_.*')
+      tcli_obj._ParseCommands('/X device_c')
       self.assertListEqual(['device_a', 'device_b'], tcli_obj.device_list)
-      tcli_obj.ParseCommands('cat a')
-      tcli_obj.ParseCommands('/X ^')
+      tcli_obj._ParseCommands('cat a')
+      tcli_obj._ParseCommands('/X ^')
       self.assertListEqual(['device_a', 'device_b', 'device_c'],
                            tcli_obj.device_list)
 
