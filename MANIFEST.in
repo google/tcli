@@ -1,5 +1,4 @@
 include LICENSE
-include BUILD
 recursive-include *.md
 recursive-include textfsm *
 recursive-include testdata *

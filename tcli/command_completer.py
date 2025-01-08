@@ -4,6 +4,8 @@ import re
 
 from tcli import command_parser
 
+_COMPLETER_LIST = []
+
 
 def CmdCompleter(full_line: str, state: int, filter_engine) -> str|None:
   """Commandline completion used by readline library."""
