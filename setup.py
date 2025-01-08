@@ -47,7 +47,7 @@ setup(
         'Operating System :: OS Independent',
         'Programming Language :: Python :: 3',
         "Programming Language :: Python :: 3 :: Only",],
-    requires=['absl', 'textfsm', 'tqdm'],
+    requires=['absl-py', 'textfsm', 'tqdm'],
     packages=['tcli'],
     python_requires='>=3.6, <4',
     include_package_data=True,
