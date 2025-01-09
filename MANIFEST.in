@@ -1,4 +1,4 @@
 include LICENSE
-recursive-include *.md
-recursive-include textfsm *
-recursive-include testdata *
+recursive-include . *.md
+recursive-include tcli/tcli_textfsm *
+recursive-include tcli/testdata *
