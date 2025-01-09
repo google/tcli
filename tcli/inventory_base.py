@@ -93,13 +93,10 @@ class InventoryError(Error):
 
 class Attribute(object):
   """Object for device attributes to be used as cli commands for filtering."""
-  type Case = typing.Union[typing.Literal['lower'],
-                           typing.Literal['upper'],
-                           typing.Literal['title']]
 
   def __init__(
       self, name:str, default_value: str='', valid_values:list[str]=[],
-      help_str:str='', display_case:Case='lower'):
+      help_str:str='', display_case='lower'):
     self._default = default_value
     self.help_str = help_str
     self.name = name

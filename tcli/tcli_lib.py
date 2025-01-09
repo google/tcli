@@ -31,7 +31,7 @@ from absl import flags
 from absl import logging
 try:
   # For windows platform.
-  from pyreadline3.rlmain import Readline
+  from pyreadline3.rlmain import Readline                                       # type: ignore
   readline = Readline()
 except(ImportError):
   import readline
@@ -906,7 +906,7 @@ class TCLI(object):
       for name in self.inventory.attributes:                                    # type: ignore
         if name == 'flags': continue
         if not getattr(device, name): continue
-        attr_list.append(f'{name.title()}:{str(getattr(device, name)) or ''}')
+        attr_list.append(f'{name.title()}:{str(getattr(device, name)) or ""}')
 
       for fl in device.flags:
         attr_list.append(fl)
@@ -996,7 +996,7 @@ class TCLI(object):
 
     self.buffers.Append(buf, buf_file.read())
     buf_file.close()
-    return f"{self.buffers.GetBuffer(buf).count('\n')} lines read."
+    return '%d lines read.' % self.buffers.GetBuffer(buf).count('\n')
 
   def _CmdTimeout(
       self, command: str, args: list[str], append: bool) -> str|None:
@@ -1052,7 +1052,7 @@ class TCLI(object):
     except IOError as error_message:
       raise ValueError(str(error_message))
 
-    return f"{content.count('\n')} lines written."
+    return '%d lines written.' % content.count('\n')
   
   # pylint: enable=unused-argument
   ##############################################################################
