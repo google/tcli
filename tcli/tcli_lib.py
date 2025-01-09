@@ -906,7 +906,7 @@ class TCLI(object):
       for name in self.inventory.attributes:                                    # type: ignore
         if name == 'flags': continue
         if not getattr(device, name): continue
-        attr_list.append(f'{name.title()}:{str(getattr(device, name)) or ''}')
+        attr_list.append(f'{name.title()}:{str(getattr(device, name)) or ""}')
 
       for fl in device.flags:
         attr_list.append(fl)
