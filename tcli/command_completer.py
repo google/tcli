@@ -99,7 +99,7 @@ def TCLICompleter(full_line: str, state: int, cli_parser) -> str|None:
     # If we have a shortname, expand it before continuing.
     if len(cmd_name) == 1:
       for cname in cli_parser:
-        if cli_parser[cname].short_name is cmd_name:
+        if cli_parser[cname].short_name == cmd_name:
           cmd_name = cname
 
     # Compare the subsequent arguments with the specific command completer.

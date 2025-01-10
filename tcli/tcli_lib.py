@@ -590,8 +590,8 @@ class TCLI(object):
 
     if FLAGS.config_file.lower() != 'none':
       try:
-        config_file = open(FLAGS.config_file)
-        self.buffers.Append('startup', config_file.read())
+        with open(FLAGS.config_file) as config_file:
+          self.buffers.Append('startup', config_file.read())
         self._ParseCommands(self.buffers.GetBuffer('startup'))
       except IOError:
         # Silently fail if we don't find a file in the default location.
