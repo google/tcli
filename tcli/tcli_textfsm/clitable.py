@@ -82,16 +82,21 @@ class CliTable(clitable.CliTable):
                             attributes)
 
     template_files = self._TemplateNamesToFiles(templates)
-    # Re-initialise the table.
-    self.Reset()
-    self._keys = set()
-    self.table = self._ParseCmdItem(self.raw, verbose=verbose,
-                                    template_file=template_files[0])
 
-    # Add additional columns from any additional tables.
-    for tmplt in template_files[1:]:
-      self.extend(self._ParseCmdItem(self.raw, verbose=verbose,
-                                     template_file=tmplt), set(self._keys))
+    try:
+      # Re-initialise the table.
+      self.Reset()
+      self._keys = set()
+      self.table = self._ParseCmdItem(self.raw, verbose=verbose,
+                                      template_file=template_files[0])
+
+      # Add additional columns from any additional tables.
+      for tmplt in template_files[1:]:
+        self.extend(self._ParseCmdItem(self.raw, verbose=verbose,
+                                      template_file=tmplt), set(self._keys))
+    finally:
+      for f in template_files:
+        f.close()
 
   def _ParseCmdItem(self, cmd_input, template_file=None, verbose=True):
     """Creates Texttable with output of command.
