@@ -202,32 +202,40 @@ class Inventory(inventory_base.Inventory):
   def SendRequests(
       self, requests_callbacks:list[tuple[CmdRequest, typing.Callable]],
       deadline: float|None=None) -> None:
-    """Submit command requests to device connection service."""
+    """Submits command requests to device manager.
+
+    Submit the command requests to the device manager for resolution.
+    Each tuple contains a request object created by CreateCmdRequest and a
+    corresponding callback that expects a response object with a matching uid
+    attribute.
+
+    As command results from devices are collected then the callback function
+    is to be executed by the device manager.
+
+    Args:
+      requests_callbacks: List of tuples.
+        Each tuple pairs a request object with a callback function.
+      deadline: An optional int, the deadline to set when sending the request.
+    Returns:
+      None
+    """
 
     for (request, callback) in requests_callbacks:
-      # Routine supports sending commands as non blocking async calls.
-      # Effective in cases where device access is controlled by a service.
-      # Here we simply open a file with canned responses and return them
-      # iteratively.
+      callback(
+        self._ReadCannedResult(request.uid, request.target, request.command))
+  
+  def _ReadCannedResult(
+      self, uid: int, target: str, command: str) -> inventory_base.Response:
+    """Reads canned result from local file."""
 
-      # Rather than canned responses, users should make use of a device accessor
-      # library such as:
-
-      data, error = '', ''
-      file_name = request.target + '_' + request.command.replace(' ', '_')
-      file_path = os.path.join(DEFAULT_RESPONSE_DIRECTORY, file_name)
-      try:
-        with open(file_path) as fp:
-          data = fp.read()
-      except IOError:
-        error = ('Failure to retrieve response from device "%s",'
-                 ' for command "%s".' % (request.target, request.command))
-      response = inventory_base.Response(uid=request.uid,
-                                            device_name=request.target,
-                                            command=request.command,
-                                            data=data,
-                                            error=error)
-      # Normally the commands would be submitted to a device server and the
-      # responses returned in callbacks. For canned responses we built the
-      # response and call the callback straight away.
-      callback(response)
+    data, error = '', ''
+    file_name = target + '_' + command.replace(' ', '_')
+    file_path = os.path.join(DEFAULT_RESPONSE_DIRECTORY, file_name)
+    try:
+      with open(file_path) as fp:
+        data = fp.read()
+    except IOError:
+      error = ('Failure to retrieve response from device "%s",'
+                ' for command "%s".' % (target, command))
+    return inventory_base.Response(
+      uid=uid, device_name=target, command=command, data=data, error=error)
