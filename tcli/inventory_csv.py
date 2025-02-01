@@ -33,6 +33,7 @@ server, which may be one of:
 ... or something else entirely.
 """
 
+import asyncio
 import collections
 import os
 import typing
@@ -221,21 +222,22 @@ class Inventory(inventory_base.Inventory):
     """
 
     for (request, callback) in requests_callbacks:
-      callback(
-        self._ReadCannedResult(request.uid, request.target, request.command))
+      asyncio.run(self._ReadCannedResult(request, callback))
   
-  def _ReadCannedResult(
-      self, uid: int, target: str, command: str) -> inventory_base.Response:
+  async def _ReadCannedResult(
+      self, request: CmdRequest, callback: typing.Callable) -> None:
     """Reads canned result from local file."""
 
     data, error = '', ''
-    file_name = target + '_' + command.replace(' ', '_')
+    file_name = request.target + '_' + request.command.replace(' ', '_')
     file_path = os.path.join(DEFAULT_RESPONSE_DIRECTORY, file_name)
     try:
       with open(file_path) as fp:
         data = fp.read()
     except IOError:
       error = ('Failure to retrieve response from device "%s",'
-                ' for command "%s".' % (target, command))
-    return inventory_base.Response(
-      uid=uid, device_name=target, command=command, data=data, error=error)
+                ' for command "%s".' % (request.target, request.command))
+    callback(inventory_base.Response(uid=request.uid,
+                                     device_name=request.target,
+                                     command=request.command, data=data,
+                                     error=error))
