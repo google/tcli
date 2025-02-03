@@ -33,7 +33,6 @@ server, which may be one of:
 ... or something else entirely.
 """
 
-import asyncio
 import collections
 import os
 import typing
@@ -74,10 +73,6 @@ DEVICE = inventory_base.DEVICE
 ## of the device inventory CSV file that you wish to use.
 DEFAULT_CSV_FILE = os.path.join(os.path.dirname(__file__),
                                 'testdata', 'test_devices')
-## CHANGEME
-## Where we store the canned responses.
-DEFAULT_RESPONSE_DIRECTORY = os.path.join(
-    os.path.dirname(__file__), 'testdata', 'device_output')
 
 ## CHANGEME
 ## Any devices to exclude by default for all users, should be defined here.
@@ -199,45 +194,3 @@ class Inventory(inventory_base.Inventory):
     with open(FLAGS.inventory) as csv_file:
       logging.debug('Reading device inventory for file "%s".', FLAGS.inventory)
       self._devices = self._ParseDevicesFromCsv(csv_file)
-
-  def SendRequests(
-      self, requests_callbacks:list[tuple[CmdRequest, typing.Callable]],
-      deadline: float|None=None) -> None:
-    """Submits command requests to device manager.
-
-    Submit the command requests to the device manager for resolution.
-    Each tuple contains a request object created by CreateCmdRequest and a
-    corresponding callback that expects a response object with a matching uid
-    attribute.
-
-    As command results from devices are collected then the callback function
-    is to be executed by the device manager.
-
-    Args:
-      requests_callbacks: List of tuples.
-        Each tuple pairs a request object with a callback function.
-      deadline: An optional int, the deadline to set when sending the request.
-    Returns:
-      None
-    """
-
-    for (request, callback) in requests_callbacks:
-      asyncio.run(self._ReadCannedResult(request, callback))
-  
-  async def _ReadCannedResult(
-      self, request: CmdRequest, callback: typing.Callable) -> None:
-    """Reads canned result from local file."""
-
-    data, error = '', ''
-    file_name = request.target + '_' + request.command.replace(' ', '_')
-    file_path = os.path.join(DEFAULT_RESPONSE_DIRECTORY, file_name)
-    try:
-      with open(file_path) as fp:
-        data = fp.read()
-    except IOError:
-      error = ('Failure to retrieve response from device "%s",'
-                ' for command "%s".' % (request.target, request.command))
-    callback(inventory_base.Response(uid=request.uid,
-                                     device_name=request.target,
-                                     command=request.command, data=data,
-                                     error=error))

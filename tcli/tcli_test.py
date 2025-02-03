@@ -24,6 +24,7 @@ from absl import flags
 
 from tcli import command_register
 from tcli import inventory_base as inventory
+from tcli import accessor_base as accessor
 from tcli import tcli_lib as tcli
 from tcli.tcli_textfsm import clitable
 
@@ -117,6 +118,7 @@ class UnitTestTCLI(unittest.TestCase):
     self.tcli_obj.inventory.targets = ''                                        # type: ignore
     # type: ignore
     self.tcli_obj._Print = mock.Mock()
+    accessor.SendRequests = mock.Mock()
 
     command_register.RegisterCommands(self.tcli_obj, self.tcli_obj.cli_parser)
     self.tcli_obj.cli_parser.RegisterCommand(
@@ -849,6 +851,7 @@ class UnitTestTCLI(unittest.TestCase):
   def testTCLIBufferLog(self):
     """Tests logging of commands to a buffer."""
 
+    self.tcli_obj.inventory.device_list = []                                    # type: ignore
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
       # Record commands but not escape commands.
       self.tcli_obj._TCLICmd('log hello')

@@ -41,6 +41,7 @@ from tcli import command_register
 from tcli import command_response
 from tcli import display
 # inventory import will be overridden in main.py
+from tcli import accessor_base as accessor
 from tcli import inventory_base as inventory
 from tcli import text_buffer
 from tcli.command_parser import ParseError, I
@@ -337,7 +338,7 @@ class TCLI(object):
     requests_callbacks = [(req, self._Callback) for req in requests]
     # Setup progress indicator.
     self.cmd_response.StartIndicator()
-    self.inventory.SendRequests(requests_callbacks, deadline=self.timeout)
+    accessor.SendRequests(requests_callbacks, deadline=self.timeout)
 
     # Wait for all callbacks to complete.
     # We add a 5 seconds pad to allow requests to timeout and be included in the
