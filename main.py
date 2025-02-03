@@ -35,12 +35,17 @@ flags.DEFINE_boolean(
     TCLI runs in interactive mode. This is the default if no cmds are supplied.'
     Shortname: 'I'.""", short_name='I')
 # Defaults to inventory_csv.py which contains canned data for testing.
+flags.DEFINE_string('accessor_file', 'accessor_canned',
+                    'Name of the module that implements SendRequests.')
+# Defaults to inventory_csv.py which contains canned data for testing.
 flags.DEFINE_string('inventory_file', 'inventory_csv',
-                    'Name of the  module that implements the Inventory class.')
+                    'Name of the module that implements the Inventory class.')
 FLAGS = flags.FLAGS
 
 
 def main(_):
+  # Replace the generic Accessor function with the site specific one.
+  tcli.accessor = importlib.import_module(f'tcli.{FLAGS.accessor_file}')
   # Replace the generic Inventory class with the site specific one.
   tcli.inventory = importlib.import_module(f'tcli.{FLAGS.inventory_file}')
   try:

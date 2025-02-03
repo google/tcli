@@ -21,7 +21,6 @@ and displaying the results received from accessor for said remote devices.
 
 import copy
 import os
-import re
 import subprocess
 import sys
 import tempfile
@@ -40,7 +39,9 @@ from tcli import command_completer as completer
 from tcli import command_parser
 from tcli import command_register
 from tcli import command_response
+from tcli import display
 # inventory import will be overridden in main.py
+from tcli import accessor_base as accessor
 from tcli import inventory_base as inventory
 from tcli import text_buffer
 from tcli.command_parser import ParseError, I
@@ -55,9 +56,6 @@ DISPLAY_FORMATS = command_register.DISPLAY_FORMATS
 
 # cli modes on the target device.
 MODE_FORMATS = command_register.MODE_FORMATS
-
-# Display color combinations.
-COLOR_SCHEMES = command_register.COLOR_SCHEMES
 
 # TCLI (local) command prefix.
 SLASH = command_parser.SLASH
@@ -82,23 +80,6 @@ MOTD = f"""#!{'#'*BANNER_WIDTH}!#'
 #!
 #! Have a nice day!
 #!{'#'*BANNER_WIDTH}!#"""
-
-# Prompt displays the target string, count of targets and if safe mode is on.
-PROMPT_HDR = '#! <%s[%s]%s> !#'
-PROMPT_STR = '#! '
-
-# Colour mapping depending on colour scheme.
-LIGHT_SYSTEM_COLOR = ['yellow']
-LIGHT_WARNING_COLOR = ['red']
-LIGHT_TITLE_COLOR = ['cyan']
-
-DARK_SYSTEM_COLOR = ['bold', 'blue']
-DARK_WARNING_COLOR = ['bold', 'red']
-DARK_TITLE_COLOR = ['bold', 'magenta']
-
-GROSS_SYSTEM_COLOR = ['bold', 'magenta', 'bg_cyan']
-GROSS_WARNING_COLOR = ['bold', 'yellow', 'bg_magenta']
-GROSS_TITLE_COLOR = ['bold', 'red', 'bg_green']
 
 # Default path for config commands. Commands are run from this file at startup.
 DEFAULT_CONFIGFILE = os.path.join(os.path.expanduser('~'), '.tclirc')
@@ -144,7 +125,6 @@ class TCLI(object):
     cli_parser: Object that handles CLI command attributes and handler.
     cmd_response: Object that handles collating device requests/responses.
     color: If output uses ANSI escape characters for color.
-    color_scheme: Whether to use 'dark' on light background or vice versa.
     display: String denoting how to format output data.
     filter: String denoting how to extract data from device command output.
     filter_engine: Object that parses device command data.
@@ -156,19 +136,15 @@ class TCLI(object):
     mode: String denoting what device mode is the target of cli commands.
     pipe: String denoting shell commands to read/write output data.
     playback: A string, name of the active playback buffer.
-    prompt: String to display back to the user in interactive mode.
     record: String buffer name for where to record command input.
     recordall: Similar to 'record' but stores escape commands too.
     safemode: Boolean, control if raw commands are forwarded to targets or not.
-    system_color: Color for system strings.
     targets: String of device names and regular expressions to match against.
     device_list: Sorted list of device names, the union of targets,
         excluding matches with xtargets. Read-only.
-    title_color: Color for titles in standard strings.
     timeout: Integer, Duration (in seconds) to wait for outstanding commands
         responses to complete.
     verbose: Boolean, if to display all columns or suppress Verbose ones.
-    warning_color: Color for warning strings.
     xtargets: String of device names and regular expressions to exclude.
   """
 
@@ -181,12 +157,10 @@ class TCLI(object):
     self.inventory = inventory
     self.filter_engine = None
     self.playback = None
-    self.prompt: str|None = None
     self.safemode = False
     self.verbose = False
     # Attributes with defaults set by flags.
     self.color = True
-    self.color_scheme: str|None = None
     self.display = None
     self.filter = None
     self.linewrap = False
@@ -195,12 +169,11 @@ class TCLI(object):
     # Buffers
     self.log = self.logall = ''
     self.record = self.recordall = ''
-    # Display values.
-    self.system_color = self.title_color = self.warning_color = ''
 
     self.buffers = text_buffer.TextBuffer()
     self.cmd_response = command_response.CmdResponse()
     self.cli_parser = command_parser.CommandParser()
+    self.dsp = display.Display()
     if not self.inventory:
       self._InitInventory()
     command_register.RegisterCommands(self, self.cli_parser)
@@ -225,8 +198,8 @@ class TCLI(object):
     tcli_obj.buffers = self.buffers
     tcli_obj.cmd_response = self.cmd_response
     tcli_obj.color = self.color
-    tcli_obj.color_scheme = self.color_scheme
     tcli_obj.display = self.display
+    tcli_obj.dsp = self.dsp
     tcli_obj.filter = self.filter
     tcli_obj.filter_engine = self.filter_engine
     tcli_obj.linewrap = self.linewrap
@@ -237,11 +210,8 @@ class TCLI(object):
     tcli_obj.record = self.record
     tcli_obj.recordall = self.recordall
     tcli_obj.safemode = self.safemode
-    tcli_obj.system_color = self.system_color
     tcli_obj.timeout = self.timeout
-    tcli_obj.title_color = self.title_color
     tcli_obj.verbose = self.verbose
-    tcli_obj.warning_color = self.warning_color
     return tcli_obj
 
   devices = property(lambda self: self.inventory.devices)
@@ -276,11 +246,12 @@ class TCLI(object):
 
     # Clear response dictionary to ignore outstanding requests.
     self.cmd_response = command_response.CmdResponse()
-    self._SetPrompt()
     # Print the main prompt, so the ASCII escape sequences work.
-    print(self.prompt)
+    # Displays the target string, count of targets and if safe mode is on.
+    print(self.dsp.getPrompt(self.inventory.targets,                            # type: ignore
+                             self.device_list, self.safemode))                  
     # Stripped ASCII escape from here, as they are not interpreted in PY3.
-    self._ParseCommands(input(PROMPT_STR))
+    self._ParseCommands(input(display.PROMPT_STR))
 
   def _BufferInUse(self, buffername: str) -> bool:
     """Check if buffer is already being written to."""
@@ -367,7 +338,7 @@ class TCLI(object):
     requests_callbacks = [(req, self._Callback) for req in requests]
     # Setup progress indicator.
     self.cmd_response.StartIndicator()
-    self.inventory.SendRequests(requests_callbacks, deadline=self.timeout)
+    accessor.SendRequests(requests_callbacks, deadline=self.timeout)
 
     # Wait for all callbacks to complete.
     # We add a 5 seconds pad to allow requests to timeout and be included in the
@@ -392,7 +363,7 @@ class TCLI(object):
       self._Print(self._Pipe(result.LabelValueTable(), pipe=pipe))
 
     elif self.display == 'tbl':
-      (_, width) = terminal.TerminalSize()
+      (_, width) = terminal.TerminalSize()                                      # type: ignore
       try:
         self._Print(self._Pipe(result.FormattedTable(width), pipe=pipe))
       except TableError as error_message:
@@ -634,38 +605,8 @@ class TCLI(object):
     # Capture output in logs.
     for buf in (self.logall,):
       self.buffers.Append(buf, msg)
-
-    # Format for width of display.
-    if self.linewrap: msg = terminal.LineWrap(msg)
-    # Colourise depending on nature of message.
-    if self.color:
-      msg_color = f'{msgtype}_color'
-      if hasattr(self, msg_color) and type(getattr(self, msg_color) is str):
-        msg = terminal.AnsiText(msg, getattr(self, msg_color))
-    # Warnings go to stderr.
-    if msgtype == 'warning':
-      print(msg, file=sys.stderr)
-    else:
-      print(msg)
-
-  def _SetPrompt(self) -> None:
-    """Sets the prompt string with current targets."""
-
-    safe = '*' if self.safemode else ''
-
-    # Truncate prompt if too long to fit in terminal.
-    target_str = '#####'
-    (_, width) = terminal.TerminalSize()
-    # Expand the targets displayed in prompt, if it fits in the terminal.
-    if self.inventory:
-      if (width > len(
-        PROMPT_HDR % (self.inventory.targets, len(self.device_list), safe))):
-        target_str = self.inventory.targets
-
-    self.prompt = PROMPT_HDR % (
-      terminal.AnsiText(target_str, self.system_color),
-      terminal.AnsiText(len(self.device_list), self.warning_color),
-      terminal.AnsiText(safe, self.title_color))
+    
+    self.dsp.printOut(msg, self.color, self.linewrap, msgtype)
 
   def _TCLICmd(self, line: str) -> None:
     f"""TCLI configuration command.
@@ -746,30 +687,10 @@ class TCLI(object):
     """Sets ANSI color escape values."""
 
     if not args:
-      return self.color_scheme
+      return self.dsp.color_scheme
     
     scheme = args[0]
-    if scheme not in COLOR_SCHEMES:
-      raise ValueError(f"Error: Unknown color scheme: '{scheme}'")
-
-    self.color_scheme = scheme
-    if not self.color:
-      # If we're not displaying colour, then clear the values.
-      self.system_color = self.warning_color = self.title_color = ''
-      return
-
-    if scheme == 'light':
-      self.system_color = LIGHT_SYSTEM_COLOR
-      self.warning_color = LIGHT_WARNING_COLOR
-      self.title_color = LIGHT_TITLE_COLOR
-    elif scheme == 'dark':
-      self.system_color = DARK_SYSTEM_COLOR
-      self.warning_color = DARK_WARNING_COLOR
-      self.title_color = DARK_TITLE_COLOR
-    elif scheme == 'gross':
-      self.system_color = GROSS_SYSTEM_COLOR
-      self.warning_color = GROSS_WARNING_COLOR
-      self.title_color = GROSS_TITLE_COLOR
+    self.dsp.setColorScheme(scheme)
 
   def _CmdCommand(self, command: str, args: list[str], append: bool) -> None:
     """Submit command to devices."""
@@ -819,10 +740,10 @@ class TCLI(object):
       inventory_str = self.inventory.ShowEnv()
 
     return '\n'.join([
-      f'Display: {self.display}, Filter: {self.filter}',
+      f'Format: {self.display}, Filter: {self.filter}',
       f'Record: {self.record}, Recordall: {self.recordall}',
       f'Log: {self.log}, Logall: {self.logall}',
-      f'Color: {self.color}, Scheme: {self.color_scheme}',
+      f'Color: {self.color}, Scheme: {self.dsp.color_scheme}',
       f'Timeout: {self.timeout}, Verbose: {self.verbose}',
       f'CLI Mode: {self.mode}, Safemode: {self.safemode}',
       f'Line Wrap: {self.linewrap}\n{inventory_str}'

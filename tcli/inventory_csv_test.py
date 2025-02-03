@@ -103,48 +103,5 @@ class UnitTestCSVInventory(unittest.TestCase):
     self.inv._FetchDevices()
     self.assertTrue(self.inv._devices)
 
-  def testSendRequests(self):
-    """Tests command requests are pulled from file."""
-    
-    class requestObject(inventory.CmdRequest):
-      uid = 0
-      def __init__(self, target, command):
-        self.target = target
-        self.command = command
-        self.uid += requestObject.uid
-
-    # Invalid target or command results in error.
-    target = 'bogus'
-    command = 'show version'
-    request = requestObject(target, command)
-    callback = mock.MagicMock()
-
-    self.inv.SendRequests([(request, callback),])
-    callback.assert_called_with(
-      inventory.inventory_base.Response(
-        uid=0, device_name=target, command=command, data='',
-        error='Failure to retrieve response from device '
-        + f'"{target}", for command "{command}".'
-      )
-    )
-
-    # Result is pulled from file for valid device and command.
-    target = 'device_a'
-    request = requestObject(target, command)
-    file_result = os.path.join(inventory.DEFAULT_RESPONSE_DIRECTORY, 
-                             f'{target}_{command}'.replace(' ', '_'))
-    with open(file_result) as fp:
-      data = fp.read()
-    callback = mock.MagicMock()
-
-    self.inv.SendRequests([(request, callback),])
-    callback.assert_called_with(
-      inventory.inventory_base.Response(
-        uid=0, device_name=target, command=command,
-        data=data,
-        error=''
-      )
-    )
-
 if __name__ == '__main__':
   unittest.main()

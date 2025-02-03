@@ -314,28 +314,6 @@ class Inventory(object):
     for attr in self.exclusions:
       cmd_register.ExecWithDefault(attr)
 
-  def SendRequests(
-      self, requests_callbacks:list[tuple[CmdRequest, typing.Callable]],
-      deadline:float|None=None) -> None:
-    """Submits command requests to device manager.
-
-    Submit the command requests to the device manager for resolution.
-    Each tuple contains a request object created by CreateCmdRequest and a
-    corresponding callback that expects a response object with a matching uid
-    attribute.
-
-    As command results from devices are collected then the callback function
-    is to be executed by the device manager.
-
-    Args:
-      requests_callbacks: List of tuples.
-        Each tuple pairs a request object with a callback function.
-      deadline: An optional int, the deadline to set when sending the request.
-    Returns:
-      None
-    """
-    raise NotImplementedError
-
   def ShowEnv(self) -> str:
     """Show inventory attribute filter settings."""
 
@@ -647,7 +625,7 @@ class Inventory(object):
       # Let pending getters know the data is ready.
       self._loaded.set()
 
-  def _FetchDevices(self) -> None|NotImplementedError:
+  def _FetchDevices(self) -> None | NotImplementedError:
     """Fetches Devices from external store ."""
     raise NotImplementedError
 

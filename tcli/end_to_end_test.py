@@ -25,6 +25,7 @@ from tcli import tcli_lib as tcli
 
 
 tcli.inventory = importlib.import_module('tcli.inventory_csv')
+tcli.accessor = importlib.import_module('tcli.accessor_canned')
 FLAGS = flags.FLAGS
 
 # Test outputs.
