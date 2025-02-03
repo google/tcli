@@ -326,7 +326,7 @@ class UnitTestTCLI(unittest.TestCase):
         command='cat epsilon', data='the wall\n')
 
   def testFormatResponse(self):
-    """Tests display of command results - Single entry, csv format."""
+    """Tests format of command results - Single entry, csv format."""
 
     self._CannedResponse()
 
@@ -343,7 +343,7 @@ class UnitTestTCLI(unittest.TestCase):
       ])
 
   def testFormatResponseCSV1(self):
-    """Tests display of command results - Multiple entries, csv format."""
+    """Tests format of command results - Multiple entries, csv format."""
 
     self._CannedResponse()
 
@@ -362,7 +362,7 @@ class UnitTestTCLI(unittest.TestCase):
       ])
 
   def testFormatResponseCSV2(self):
-    """Tests display of command results."""
+    """Tests format of command results."""
 
     self._CannedResponse()
 
@@ -380,7 +380,7 @@ class UnitTestTCLI(unittest.TestCase):
       ])
 
   def testFormatResponseCSV3(self):
-    """Tests display of command results - Multiple entries and Vendors."""
+    """Tests format of command results - Multiple entries and Vendors."""
 
     self._CannedResponse()
 
@@ -422,7 +422,7 @@ class UnitTestTCLI(unittest.TestCase):
       ])
 
   def testFormatResponseVarz(self):
-    """Tests display of command results - Varz format."""
+    """Tests format of command results - Varz format."""
 
     self._CannedResponse()
 
@@ -444,7 +444,7 @@ class UnitTestTCLI(unittest.TestCase):
       ])
 
   def testFormatResponseGsh(self):
-    """Tests display of command results - Gsh format."""
+    """Tests format of command results - Gsh format."""
 
     # GSH formatted.
     self.tcli_obj.display = 'tbl'
@@ -453,47 +453,6 @@ class UnitTestTCLI(unittest.TestCase):
       # Displays warning if width too narrow.
       self.tcli_obj._FormatRow([1])
       mock_print.assert_called_once()
-
-  def testColor(self):
-    self.tcli_obj.color = False
-    self.tcli_obj._TCLICmd('color on')
-    self.assertTrue(self.tcli_obj.color)
-    self.tcli_obj.color = False
-    self.tcli_obj._TCLICmd('color On')
-    self.assertTrue(self.tcli_obj.color)
-    self.tcli_obj.color = False
-    self.tcli_obj._TCLICmd('color True')
-    self.assertTrue(self.tcli_obj.color)
-    self.tcli_obj.color = False
-    self.tcli_obj._TCLICmd('color')
-    self.assertTrue(self.tcli_obj.color)
-    self.tcli_obj._TCLICmd('color')
-    self.assertEqual(False, self.tcli_obj.color)
-
-    self.tcli_obj.color = True
-    self.tcli_obj._Print = mock.Mock()
-
-    self.tcli_obj.system_color = ''
-    self.tcli_obj.warning_color = ''
-    self.tcli_obj.title_color = ''
-    self.tcli_obj._CmdColorScheme('color_scheme', ['dark'])
-    self.assertEqual(tcli.DARK_SYSTEM_COLOR, self.tcli_obj.system_color)
-    self.assertEqual(tcli.DARK_WARNING_COLOR, self.tcli_obj.warning_color)
-    self.assertEqual(tcli.DARK_TITLE_COLOR, self.tcli_obj.title_color)
-
-    self.tcli_obj._CmdColorScheme('color_scheme', ['light'])
-    self.assertEqual(tcli.LIGHT_SYSTEM_COLOR, self.tcli_obj.system_color)
-    self.assertEqual(tcli.LIGHT_WARNING_COLOR, self.tcli_obj.warning_color)
-    self.assertEqual(tcli.LIGHT_TITLE_COLOR, self.tcli_obj.title_color)
-
-    self.assertRaises(ValueError, self.tcli_obj._CmdColorScheme,
-                      'color_scheme', ['noscheme'])
-
-    self.tcli_obj.color = False
-    self.tcli_obj._CmdColorScheme('color_scheme', ['light'])
-    self.assertEqual('', self.tcli_obj.system_color)
-    self.assertEqual('', self.tcli_obj.warning_color)
-    self.assertEqual('', self.tcli_obj.title_color)
 
   def testParseCommands(self):
     """Tests that commands are supplied to CmdRequests."""
@@ -577,8 +536,6 @@ class UnitTestTCLI(unittest.TestCase):
   def testTCLIColor(self):
 
     self.tcli_obj.color = False
-    self.tcli_obj.color_scheme = 'light'
-
     # Color toggles on and off.
     self.assertFalse(self.tcli_obj.color)
     self.tcli_obj._TCLICmd('color on')
@@ -587,22 +544,18 @@ class UnitTestTCLI(unittest.TestCase):
     self.assertFalse(self.tcli_obj.color)
     self.tcli_obj._TCLICmd('color')
     self.assertTrue(self.tcli_obj.color)
+    self.tcli_obj.color = False
+    self.tcli_obj._TCLICmd('color On')
+    self.assertTrue(self.tcli_obj.color)
+    self.tcli_obj.color = False
+    self.tcli_obj._TCLICmd('color True')
+    self.assertTrue(self.tcli_obj.color)
+
     # Invalid bool rejected.
     with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
       self.tcli_obj._TCLICmd('color bogus')
       mock_print.assert_called_once_with(
           "Error: Argument must be 'on' or 'off'.", msgtype='warning')
-    # Valid color_scheme accepted
-    self.tcli_obj._TCLICmd('color_scheme light')
-    self.assertEqual('light', self.tcli_obj.color_scheme)
-    self.tcli_obj._TCLICmd('color_scheme dark')
-    self.assertEqual('dark', self.tcli_obj.color_scheme)
-
-    # Invalid color scheme rejected
-    with mock.patch.object(self.tcli_obj, '_Print') as mock_print:
-      self.tcli_obj._TCLICmd('color_scheme bogus')
-      mock_print.assert_called_once_with(
-          "Error: Unknown color scheme: 'bogus'", msgtype='warning')
 
   def testSafeMode(self):
     """Tests safemode toggle."""
@@ -635,17 +588,17 @@ class UnitTestTCLI(unittest.TestCase):
 
     self.tcli_obj.display = 'raw'
 
-    # Invalid display rejected.
+    # Invalid format rejected.
     self.tcli_obj._TCLICmd('display boo')
     self.assertEqual('raw', self.tcli_obj.display)
     self.tcli_obj._TCLICmd('display tsvboo')
     self.assertEqual('raw', self.tcli_obj.display)
 
-    # Valid display accepted.
+    # Valid format accepted.
     self.tcli_obj._TCLICmd('display csv')
     self.assertEqual('csv', self.tcli_obj.display)
 
-    # Valid short command display accepted.
+    # Valid short command format accepted.
     self.tcli_obj._TCLICmd('D raw')
     self.assertEqual('raw', self.tcli_obj.display)
 
@@ -663,7 +616,7 @@ class UnitTestTCLI(unittest.TestCase):
     self.tcli_obj._TCLICmd('mode shell')
     self.assertEqual('shell', self.tcli_obj.mode)
 
-    # Valid short command display accepted.
+    # Valid short command accepted.
     self.tcli_obj._TCLICmd('M gated')
     self.assertEqual('gated', self.tcli_obj.mode)
 
@@ -677,7 +630,7 @@ class UnitTestTCLI(unittest.TestCase):
       self.tcli_obj._TCLICmd('command %s' % cmd)
       mock_request.assert_called_once_with(set(), ['cat bogus'], True)
 
-  def testDisplayBadTable(self):
+  def testFormatBadTable(self):
 
     # A bad format.
     self.tcli_obj.display = 'notaformat'
