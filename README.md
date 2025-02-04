@@ -131,23 +131,37 @@ Once setup for your environment, the Power Users guide will get you up and runni
 
 ## Setup
 
-To use in your environment TCLI needs to be configured to retrieve a list of devices from whatever system
-is used to manage the site specific inventory. And integrated to call your device accessor system
-(or to scrape the output files that it produces).
+To use in your environment TCLI needs to be configured to:
 
-Your site customisations are made to a new file that implements a child class of ``Inventory``.
-This class is declared in ``inventory.py``. So import, inherit, and override the
-[methods](https://github.com/search?q=repo%3Aharro%2Ftcli+NotImplementedError&type=code)
-``_FetchDevices`` and ``SendRequests`` of the parent ``Inventory`` class in your file.
+ 1. Retrieve a list of devices from whatever system is used to manage site specific inventory.
+ 1. Call the site specific device accessor system (or to scrape the output files that it produces).
 
-A "canned" example is included
-[``inventory_csv.py``](https://github.com/harro/tcli/blob/master/tcli/inventory_csv.py) for illustration.
+### Inventory
 
-Your substitute module is imported by the command line flag _'inventory_file'_.
-The module is expected to be located in the tcli directory.
+Inventory customisation is made to a new file that implements a child class of ``Inventory``.
+This class is declared in ``inventory.py``. Import, inherit, and override the ``_FetchDevices``
+method of the parent class.
 
-Contributors are welcome to add various ``inventory_<accessor>.py`` files for popular open source
-device accessor methods.
+An example implementation is provided, ``inventory_csv.py``, that reads devices from a CSV file.
+
+Your new library can be substituted in at runtime with the _'--inventory_file'_ flag. The module is
+expected to be located in the tcli directory.
+
+### Accessor
+
+A single function is customised to use your chosen device accessor.
+Copy the ``accessor.py`` file and replace ``SendRequests`` in that file.
+
+An example implementation is provided, ``accessor_canned.py``, that reads
+example device outputs that are stored (canned) in static files.
+
+Your new function can be substituted in at runtime with the _'--accessor_file'_ flag. The module is
+expected to be located in the tcli directory.
+
+Contributors are welcome to add various inventory or accessor library files for
+popular inventory or device accessor solutions.
+
+### Other Customisations
 
 The structured format for device output is enabled via [TextFSM](https://github.com/google/textfsm).
 You can create new templates to display output in CSV or other structured
