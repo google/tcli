@@ -38,7 +38,7 @@ setup(
         ),
     long_description=long_description,
     long_description_content_type='text/markdown',
-    url='https://github.com/harro/tcli',
+    url='https://github.com/google/tcli',
     license='Apache License, Version 2.0',
     classifiers=[
         'Development Status :: 3 - Alpha',
