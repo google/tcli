@@ -12,32 +12,50 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
-"""Executable for TCLI."""
+"""Executable for TCLI. Sets up command completion and then prompts the user."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
-import logging
-import readline
+import importlib
 import sys
+
 from absl import app
 from absl import flags
+
 import tcli.tcli_lib as tcli
 
+
+flags.DEFINE_string(
+  'cmds', None, """
+    Commands (newline separated) to send to devices in the target list.
+    'Prompting' commands, commands that request further input from the
+    user before completing are discouraged and will fail.
+    Examples to avoid: telnet, ping, reload.
+    Shortname: 'C'.""", short_name='C')
+flags.DEFINE_boolean(
+  'interactive', False, """
+    TCLI runs in interactive mode. This is the default if no cmds are supplied.'
+    Shortname: 'I'.""", short_name='I')
+# Defaults to inventory_csv.py which contains canned data for testing.
+flags.DEFINE_string('accessor_file', 'accessor_canned',
+                    'Name of the module that implements SendRequests.')
+# Defaults to inventory_csv.py which contains canned data for testing.
+flags.DEFINE_string('inventory_file', 'inventory_csv',
+                    'Name of the module that implements the Inventory class.')
 FLAGS = flags.FLAGS
 
 
 def main(_):
-  tcli_singleton = tcli.TCLI()
+  # Replace the generic Accessor function with the site specific one.
+  tcli.accessor = importlib.import_module(f'tcli.{FLAGS.accessor_file}')
+  # Replace the generic Inventory class with the site specific one.
+  tcli.inventory = importlib.import_module(f'tcli.{FLAGS.inventory_file}')
   try:
-    logging.debug('Executing StartUp.')
-    tcli_singleton.StartUp(FLAGS.cmds, FLAGS.interactive)
+    # If no commands supplied via flags then assume interactive mode.
+    interactive =  FLAGS.interactive or not FLAGS.cmds
+    tcli_singleton = tcli.TCLI(interactive, FLAGS.cmds)
   except (EOFError, tcli.TcliCmdError,
           tcli.inventory.AuthError, tcli.inventory.InventoryError,
           ValueError) as error_message:
     print('%s' % error_message, file=sys.stderr)
-    del tcli_singleton
     sys.exit(1)
 
   if not tcli_singleton.interactive:
@@ -45,10 +63,10 @@ def main(_):
     sys.exit(0)
 
   # Interactive prompt, setup Tab completion
-  readline.set_completer(tcli_singleton.Completer)
-  readline.parse_and_bind('tab: complete')
-  readline.parse_and_bind('?: complete')
-  readline.set_completer_delims(' ')
+  tcli.readline.set_completer(tcli_singleton.Completer)
+  tcli.readline.parse_and_bind('tab: complete')
+  tcli.readline.parse_and_bind('?: complete')
+  tcli.readline.set_completer_delims(' ')
   tcli_singleton.Motd()
 
   while True:

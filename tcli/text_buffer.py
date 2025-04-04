@@ -17,7 +17,6 @@
 Dictionary of string buffers with methods for managing content.
 """
 
-
 import collections
 
 
@@ -28,31 +27,32 @@ class TextBuffer(object):
     buffers: Dictionary for storing/retrieving named text buffers.
   """
 
-  def __init__(self):
+  def __init__(self) -> None:
     self._buffers = collections.defaultdict(str)
 
-  def Append(self, text_buffer, line):
+  def Append(self, text_buffer: str, line: str) -> None:
     """Append row of text to buffer."""
     # Accept and silently discard empty buffer name or data.
-    if not text_buffer or not line:
-      return
+    if not text_buffer or not line: return
 
     if self._buffers[text_buffer]:
       self._buffers[text_buffer] += '\n' + line
     else:
       self._buffers[text_buffer] = line
 
-  def Clear(self, text_buffer):
+  def Clear(self, text_buffer: str) -> bool:
     """Clears content of named buffer."""
     if text_buffer in self._buffers:
       del self._buffers[text_buffer]
       return True
     return False
 
-  def GetBuffer(self, text_buffer):
-    """Returns named buffer if it exists, returns 'None' otherwise."""
-    return self._buffers.get(text_buffer)
+  def GetBuffer(self, text_buffer: str) -> str:
+    """Returns content of named buffer if it exists."""
+    content = self._buffers.get(text_buffer)
+    if content is None: raise AttributeError(f"No Buffer: '{text_buffer}'.")
+    return content
 
-  def ListBuffers(self):
+  def ListBuffers(self) -> str:
     """Returns list of buffers that exist (created and not cleared)."""
-    return ' '.join(sorted(self._buffers.keys()))
+    return ' '.join(sorted(self._buffers))

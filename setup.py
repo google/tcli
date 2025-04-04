@@ -30,7 +30,7 @@ with open(path.join(here, 'README.md'), encoding='utf8') as f:
 
 setup(
     name='tcli',
-    maintainer='Google',
+    maintainer='Daniel Harrison',
     maintainer_email='tcli-dev@googlegroups.com',
     version=__version__,
     description=(
@@ -45,10 +45,15 @@ setup(
         'Intended Audience :: Operations',
         'License :: OSI Approved :: Apache Software License',
         'Operating System :: OS Independent',
-        'Programming Language :: Python :: 3'],
-    requires=['absl', 'mock', 'textfsm', 'tqdm'],
-    packages=['tcli'],
+        'Programming Language :: Python :: 3',
+        "Programming Language :: Python :: 3 :: Only",],
+    install_requires=['absl-py', 'textfsm', 'tqdm',],
+    packages=['tcli',],
+    python_requires='>=3.11, <4',
     include_package_data=True,
-    setup_requires=['pytest-runner'],
-    tests_require=['pytest'],
+    package_data={
+        'tcli.testdata': ['*'],
+        'tcli.testdata.device_output': ['*'],
+    },
     )
+

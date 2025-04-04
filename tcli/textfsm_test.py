@@ -14,13 +14,11 @@
 
 """Unittest for textfsm module."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
+import unittest
 from io import StringIO    # pylint: disable=g-importing-member
+
 from absl import flags
-from absl.testing import absltest as unittest
+
 from tcli.tcli_textfsm import textfsm
 
 
@@ -38,8 +36,10 @@ class UnitTestFSM(unittest.TestCase):
 
     # Explicit default.
     t = textfsm.TextFSM(StringIO(tplt))
-    self.assertIn('Key', t._GetValue('hoo').OptionNames())
-    self.assertNotIn('Key', t._GetValue('boo').OptionNames())
+    self.assertTrue(t._GetValue('hoo'))
+    self.assertIn('Key', t._GetValue('hoo').OptionNames())                      # type: ignore
+    self.assertTrue(t._GetValue('boo'))
+    self.assertNotIn('Key', t._GetValue('boo').OptionNames())                   # type: ignore
 
     tplt = ('Value Required boo (on.)\n'
             'Value Verbose,Key hoo (on.)\n\n'
