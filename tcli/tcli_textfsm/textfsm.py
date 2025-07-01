@@ -25,9 +25,6 @@ for each input entity.
 https://github.com/google/textfsm
 """
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
 
 import json
 from absl import flags

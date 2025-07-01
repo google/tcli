@@ -14,9 +14,6 @@
 
 """Clitable that supports additional TextFSM Value Attributes."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
 
 from absl import flags
 from tcli.tcli_textfsm import textfsm
@@ -35,7 +32,7 @@ class DeviceError(Error):
 
 
 class QueryError(Error):
-  """Gnetch device query error."""
+  """Target device query error."""
 
 
 class CliTable(clitable.CliTable):
