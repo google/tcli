@@ -33,7 +33,8 @@ class TextBuffer(object):
   def Append(self, text_buffer: str, line: str) -> None:
     """Append row of text to buffer."""
     # Accept and silently discard empty buffer name or data.
-    if not text_buffer or not line: return
+    if not text_buffer or not line:
+      return
 
     if self._buffers[text_buffer]:
       self._buffers[text_buffer] += '\n' + line
@@ -50,7 +51,8 @@ class TextBuffer(object):
   def GetBuffer(self, text_buffer: str) -> str:
     """Returns content of named buffer if it exists."""
     content = self._buffers.get(text_buffer)
-    if content is None: raise AttributeError(f"No Buffer: '{text_buffer}'.")
+    if content is None:
+      raise AttributeError(f"No Buffer: '{text_buffer}'.")
     return content
 
   def ListBuffers(self) -> str:

@@ -12,20 +12,22 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
-"""Tests for tcli.display."""
+"""Unit tests for the display module."""
 
+import io
 import unittest
+from unittest import mock
 
 from tcli import display
+from textfsm import terminal
+
 
 class UnitTestDisplay(unittest.TestCase):
   """Tests the TCLI Display class."""
 
   def setUp(self):
+    super().setUp()
     self.d = display.Display()
-
-  def tearDown(self):
-    pass
 
   def testColorScheme(self):
     self.assertIsNone(self.d.color_scheme)
@@ -35,6 +37,36 @@ class UnitTestDisplay(unittest.TestCase):
     self.d.setColorScheme('dark')
     self.assertEqual('dark', self.d.color_scheme)
     self.assertRaises(ValueError, self.d.setColorScheme, 'bogus')
+
+  def testPrintOutColorHandling(self):
+    """Tests printOut with and without an active color scheme."""
+    with mock.patch('sys.stdout', new_callable=io.StringIO) as mock_stdout:
+      # Without setColorScheme called, color=True does not wrap in ANSI reset.
+      self.d.printOut(
+          'plain message', color=True, linewrap=False, msgtype='system'
+      )
+      self.assertEqual('plain message\n', mock_stdout.getvalue())
+
+    self.d.setColorScheme('light')
+    with mock.patch('sys.stdout', new_callable=io.StringIO) as mock_stdout:
+      self.d.printOut(
+          'colored system', color=True, linewrap=False, msgtype='system'
+      )
+      expected = (
+          terminal.AnsiText('colored system', display.LIGHT_SYSTEM_COLOR) + '\n'
+      )
+      self.assertEqual(expected, mock_stdout.getvalue())
+
+    with mock.patch('sys.stderr', new_callable=io.StringIO) as mock_stderr:
+      self.d.printOut(
+          'colored warning', color=True, linewrap=False, msgtype='warning'
+      )
+      expected = (
+          terminal.AnsiText('colored warning', display.LIGHT_WARNING_COLOR)
+          + '\n'
+      )
+      self.assertEqual(expected, mock_stderr.getvalue())
+
 
 if __name__ == '__main__':
   unittest.main()

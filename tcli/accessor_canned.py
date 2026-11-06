@@ -14,8 +14,8 @@
 """Sends commands to devices via callbacks."""
 
 import asyncio
+from collections.abc import Callable
 import os
-import typing
 
 from tcli import accessor_base as accessor
 from tcli import inventory_base as inventory
@@ -23,13 +23,17 @@ from tcli import inventory_base as inventory
 DEADLINE = accessor.DEADLINE
 ## CHANGEME
 ## Where we store the canned responses.
-DEFAULT_RESPONSE_DIRECTORY = os.path.join(
-    os.path.dirname(__file__), 'testdata', 'device_output')
+DEFAULT_RESPONSE_DIRECTORY = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), 'testdata', 'device_output')
+)
 
 
 def SendRequests(
-    requests_callbacks:list[tuple[accessor.CmdRequest, typing.Callable]],
-    deadline: float | None=DEADLINE) -> None:
+    requests_callbacks: list[
+        tuple[accessor.CmdRequest, Callable[[inventory.Response], None]]
+    ],
+    deadline: float | None = DEADLINE,
+) -> None:
   """Submits command requests to device manager.
 
   Submit the command requests to the device manager for resolution.
@@ -41,28 +45,45 @@ def SendRequests(
   is to be executed by the device manager.
 
   Args:
-    requests_callbacks: List of tuples.
-      Each tuple pairs a request object with a callback function.
+    requests_callbacks: List of tuples. Each tuple pairs a request object with a
+      callback function.
     deadline: An optional int, the deadline to set when sending the request.
+
   Returns:
     None
   """
-
-  for (request, callback) in requests_callbacks:
+  del deadline
+  for request, callback in requests_callbacks:
     asyncio.run(_ReadCannedResult(request, callback))
 
+
 async def _ReadCannedResult(
-    request: inventory.CmdRequest, callback: typing.Callable) -> None:
+    request: inventory.CmdRequest,
+    callback: Callable[[inventory.Response], None],
+) -> None:
   """Reads canned result from local file."""
 
   data, error = '', ''
   file_name = request.target + '_' + request.command.replace(' ', '_')
-  file_path = os.path.join(DEFAULT_RESPONSE_DIRECTORY, file_name)
+  file_path = os.path.abspath(
+      os.path.join(DEFAULT_RESPONSE_DIRECTORY, file_name)
+  )
   try:
-    with open(file_path) as fp:
+    if not file_path.startswith(DEFAULT_RESPONSE_DIRECTORY + os.sep):
+      raise OSError('Invalid file path outside response directory.')
+    with open(file_path, encoding='utf-8') as fp:
       data = fp.read()
   except IOError:
-    error = ('Failure to retrieve response from device "%s",'
-              ' for command "%s".' % (request.target, request.command))
-  callback(inventory.Response(uid=request.uid, device_name=request.target,
-           command=request.command, data=data, error=error))
+    error = (
+        'Failure to retrieve response from device "%s", for command "%s".'
+        % (request.target, request.command)
+    )
+  callback(
+      inventory.Response(
+          uid=request.uid,
+          device_name=request.target,
+          command=request.command,
+          data=data,
+          error=error,
+      )
+  )

@@ -14,15 +14,23 @@
 
 """Clitable that supports additional TextFSM Value Attributes."""
 
-
 from absl import flags
 from tcli.tcli_textfsm import textfsm
 from textfsm import clitable
 from textfsm import texttable
+# pylint: disable=g-importing-member
 from textfsm.clitable import CliTableError
 from textfsm.clitable import Error
-from textfsm.clitable import IndexTableError  # pylint: disable=unused-import
+from textfsm.clitable import IndexTableError
 
+__all__ = [
+    'CliTable',
+    'CliTableError',
+    'DeviceError',
+    'Error',
+    'IndexTableError',
+    'QueryError',
+]
 
 FLAGS = flags.FLAGS
 
@@ -51,6 +59,7 @@ class CliTable(clitable.CliTable):
     template_dir: String, directory where index file and templates reside.
   """
 
+  # pylint: disable=arguments-renamed
   def ParseCmd(self, cmd_input, attributes=None, templates=None, verbose=True):
     """Creates a TextTable table of values from cmd_input string.
 
@@ -75,8 +84,9 @@ class CliTable(clitable.CliTable):
       if row_idx:
         templates = self.index.index[row_idx]['Template']
       else:
-        raise CliTableError('No template found for attributes: "%s"' %
-                            attributes)
+        raise CliTableError(
+            'No template found for attributes: "%s"' % attributes
+        )
 
     template_files = self._TemplateNamesToFiles(templates)
 
@@ -84,13 +94,16 @@ class CliTable(clitable.CliTable):
       # Re-initialise the table.
       self.Reset()
       self._keys = set()
-      self.table = self._ParseCmdItem(self.raw, verbose=verbose,
-                                      template_file=template_files[0])
+      self.table = self._ParseCmdItem(
+          self.raw, verbose=verbose, template_file=template_files[0]
+      )
 
       # Add additional columns from any additional tables.
       for tmplt in template_files[1:]:
-        self.extend(self._ParseCmdItem(self.raw, verbose=verbose,
-                                      template_file=tmplt), set(self._keys))
+        self.extend(
+            self._ParseCmdItem(self.raw, verbose=verbose, template_file=tmplt),
+            set(self._keys),
+        )
     finally:
       for f in template_files:
         f.close()
@@ -122,3 +135,5 @@ class CliTable(clitable.CliTable):
     for record in fsm.ParseText(cmd_input):
       table.Append(record)
     return table
+
+

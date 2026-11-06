@@ -17,8 +17,8 @@
 # Colour mapping depending on colour scheme.
 import sys
 
-from textfsm import terminal
 from tcli import command_register
+from textfsm import terminal
 
 PROMPT_HDR = '#! <%s[%s]%s> !#'
 PROMPT_STR = '#! '
@@ -37,8 +37,10 @@ GROSS_TITLE_COLOR = ['bold', 'red', 'bg_green']
 # Display color combinations.
 COLOR_SCHEMES = command_register.COLOR_SCHEMES
 
+
 class Display(object):
-  """
+  """Manages CLI output formatting, prompts, and ANSI color schemes.
+
   Attributes:
     color_scheme: Whether to use 'dark' on light background or vice versa.
     system_color: Color for system strings.
@@ -46,12 +48,13 @@ class Display(object):
     warning_color: Color for warning strings.
   """
 
-
   def __init__(self) -> None:
     self.color_scheme: str | None = None
     self.system_color = self.title_color = self.warning_color = ''
 
-  def setColorScheme(self, scheme) -> None:
+  # pylint: disable=invalid-name
+  def setColorScheme(self, scheme: str) -> None:
+    """Sets the active ANSI color scheme."""
     if scheme not in COLOR_SCHEMES:
       raise ValueError(f"Error: Unknown color scheme: '{scheme}'")
 
@@ -74,29 +77,32 @@ class Display(object):
 
     safe = '*' if safemode else ''
 
-    (_, width) = terminal.TerminalSize()
+    _, width = terminal.TerminalSize()
     # Expand the targets displayed in prompt, if it fits in the terminal.
-    if (width > len(PROMPT_HDR % (targets, len(devices), safe))):
+    if width > len(PROMPT_HDR % (targets, len(devices), safe)):
       target_str = targets
     else:
       # Truncate prompt if too long to fit in terminal.
       target_str = '#####'
 
     return PROMPT_HDR % (
-      terminal.AnsiText(target_str, self.system_color),
-      terminal.AnsiText(len(devices), self.warning_color),
-      terminal.AnsiText(safe, self.title_color))
+        terminal.AnsiText(target_str, self.system_color),
+        terminal.AnsiText(len(devices), self.warning_color),
+        terminal.AnsiText(safe, self.title_color),
+    )
 
   def printOut(self, msg, color, linewrap, msgtype='default') -> None:
     """Prints (and logs) outputs."""
 
     # Format for width of display.
-    if linewrap: msg = terminal.LineWrap(msg)
+    if linewrap:
+      msg = terminal.LineWrap(msg)
     # Colourise depending on nature of message.
     if color:
       msg_color = f'{msgtype}_color'
-      if hasattr(self, msg_color) and type(getattr(self, msg_color) is str):
-        msg = terminal.AnsiText(msg, getattr(self, msg_color))
+      color_spec = getattr(self, msg_color, None)
+      if color_spec:
+        msg = terminal.AnsiText(msg, color_spec)
     # Warnings go to stderr.
     if msgtype == 'warning':
       print(msg, file=sys.stderr)

@@ -16,50 +16,70 @@
 
 import importlib
 import sys
+import types
 
 from absl import app
 from absl import flags
-
 import tcli.tcli_lib as tcli
 
-
 flags.DEFINE_string(
-  'cmds', None, """
+    'cmds',
+    None,
+    """
     Commands (newline separated) to send to devices in the target list.
     'Prompting' commands, commands that request further input from the
     user before completing are discouraged and will fail.
     Examples to avoid: telnet, ping, reload.
-    Shortname: 'C'.""", short_name='C')
+    Shortname: 'C'.""",
+    short_name='C',
+)
 flags.DEFINE_boolean(
-  'interactive', False, """
+    'interactive',
+    False,
+    """
     TCLI runs in interactive mode. This is the default if no cmds are supplied.'
-    Shortname: 'I'.""", short_name='I')
-# Defaults to inventory_csv.py which contains canned data for testing.
-flags.DEFINE_string('accessor_file', 'accessor_canned',
-                    'Name of the module that implements SendRequests.')
-# Defaults to inventory_csv.py which contains canned data for testing.
-flags.DEFINE_string('inventory_file', 'inventory_csv',
-                    'Name of the module that implements the Inventory class.')
+    Shortname: 'I'.""",
+    short_name='I',
+)
+flags.DEFINE_string(
+    'accessor_file',
+    'accessor_canned',
+    'Name of the module that implements SendRequests.',
+)
+flags.DEFINE_string(
+    'inventory_file',
+    'inventory_csv',
+    'Name of the module that implements the Inventory class.',
+)
 FLAGS = flags.FLAGS
 
 
-def main(_):
+def _ParseFlags(argv: list[str]) -> list[str]:
+  """Pre-loads accessor and inventory modules before parsing all CLI flags."""
+  FLAGS(argv, known_only=True)
   # Replace the generic Accessor function with the site specific one.
   tcli.accessor = importlib.import_module(f'tcli.{FLAGS.accessor_file}')
   # Replace the generic Inventory class with the site specific one.
   tcli.inventory = importlib.import_module(f'tcli.{FLAGS.inventory_file}')
+  return app.parse_flags_with_usage(argv)
+
+
+def main(_):
   try:
     # If no commands supplied via flags then assume interactive mode.
-    interactive =  FLAGS.interactive or not FLAGS.cmds
+    interactive = FLAGS.interactive or not FLAGS.cmds
     tcli_singleton = tcli.TCLI(interactive, FLAGS.cmds)
-  except (EOFError, tcli.TcliCmdError,
-          tcli.inventory.AuthError, tcli.inventory.InventoryError,
-          ValueError) as error_message:
+  except (
+      EOFError,
+      tcli.TcliCmdError,
+      tcli.inventory.AuthError,
+      tcli.inventory.InventoryError,
+      ValueError,
+  ) as error_message:
     print('%s' % error_message, file=sys.stderr)
     sys.exit(1)
 
   if not tcli_singleton.interactive:
-    del tcli_singleton
     sys.exit(0)
 
   # Interactive prompt, setup Tab completion
@@ -75,9 +95,9 @@ def main(_):
     except KeyboardInterrupt:
       continue
     except EOFError:
-      del tcli_singleton
       sys.exit(0)
 
 
 if __name__ == '__main__':
-  app.run(main)
+  app.run(main, flags_parser=_ParseFlags)
+

@@ -12,13 +12,13 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
-"""Tests for tcli.command_response."""
+"""Unit tests for the command_response module."""
 
 import unittest
 from unittest import mock
 
-from tcli import inventory_base as inventory
 from tcli import command_response
+from tcli import inventory_base as inventory
 
 
 class FakeLock(object):
@@ -28,14 +28,14 @@ class FakeLock(object):
   conflict = False
   was_locked = False
 
-  def acquire(self):                        # pylint: disable=g-bad-name
+  def acquire(self):  # pylint: disable=g-bad-name
     if self.locked:
       self.conflict = True
     else:
       self.locked = True
       self.was_locked = True
 
-  def release(self):                        # pylint: disable=g-bad-name
+  def release(self):  # pylint: disable=g-bad-name
     self.locked = False
 
 
@@ -112,8 +112,10 @@ class UnitTestCmdResponse(unittest.TestCase):
     """Tests AddResponse method."""
 
     self.assertFalse(
-      self.cmd_response.AddResponse(
-        inventory.Response(1, 'device_name', 'command', 'data', 'error')))
+        self.cmd_response.AddResponse(
+            inventory.Response(1, 'device_name', 'command', 'data', 'error')
+        )
+    )
 
     self.cmd_response.InitCommandRow(0, 'boohoo')
     self.cmd_response.InitCommandRow(1, 'testing')
@@ -122,18 +124,26 @@ class UnitTestCmdResponse(unittest.TestCase):
     self.cmd_response.SetRequest(1, 2)
 
     self.assertFalse(self.cmd_response._response_count)
-    self.assertTrue(self.cmd_response.AddResponse(
-      inventory.Response(1, 'device_name', 'command', 'data', 'error')))
+    self.assertTrue(
+        self.cmd_response.AddResponse(
+            inventory.Response(1, 'device_name', 'command', 'data', 'error')
+        )
+    )
     self.assertTrue(self.cmd_response._results[1])
     self.assertEqual([1], self.cmd_response._row_response[1])
     self.assertEqual(1, self.cmd_response._response_count)
-    self.assertTrue(self.cmd_response.AddResponse(
-      inventory.Response(2, 'device_name', 'command', 'data', 'error')))
-    self.assertFalse(self.cmd_response.AddResponse(
-      inventory.Response(3, 'device_name', 'command', 'data', 'error')))
+    self.assertTrue(
+        self.cmd_response.AddResponse(
+            inventory.Response(2, 'device_name', 'command', 'data', 'error')
+        )
+    )
+    self.assertFalse(
+        self.cmd_response.AddResponse(
+            inventory.Response(3, 'device_name', 'command', 'data', 'error')
+        )
+    )
     self.assertEqual(2, self.cmd_response._response_count)
-    self.assertEqual([1, 2],
-                     self.cmd_response._row_response[1])
+    self.assertEqual([1, 2], self.cmd_response._row_response[1])
     # pylint: disable=g-generic-assert
     self.assertEqual(2, len(self.cmd_response._row_index))
 
@@ -156,13 +166,17 @@ class UnitTestCmdResponse(unittest.TestCase):
 
     # Responses are added against the request IDs.
     self.cmd_response.AddResponse(
-      inventory.Response(1, 'device_name', 'command', 'data', 'error'))
+        inventory.Response(1, 'device_name', 'command', 'data', 'error')
+    )
     self.cmd_response.AddResponse(
-      inventory.Response(2, 'device_name', 'command', 'data', 'error'))
+        inventory.Response(2, 'device_name', 'command', 'data', 'error')
+    )
     self.cmd_response.AddResponse(
-      inventory.Response(3, 'device_name', 'command', 'data', 'error'))
+        inventory.Response(3, 'device_name', 'command', 'data', 'error')
+    )
     self.cmd_response.AddResponse(
-      inventory.Response(4, 'device_name', 'command', 'data', 'error'))
+        inventory.Response(4, 'device_name', 'command', 'data', 'error')
+    )
 
     self.assertFalse(self.cmd_response._current_row)
     self.assertFalse(self.cmd_response.done.is_set())
@@ -175,6 +189,29 @@ class UnitTestCmdResponse(unittest.TestCase):
     self.assertEqual(self.cmd_response.GetRow(), ([], ''))
     self.assertEqual(self.cmd_response._current_row, 2)
     self.assertTrue(self.cmd_response.done.is_set())
+
+  def testProgressBarMultiRowFinish(self):
+    """Tests that progress bar only finishes after all rows are received."""
+    self.cmd_response.InitCommandRow(0, '')
+    self.cmd_response.InitCommandRow(1, '')
+    self.cmd_response.SetRequest(0, 1)
+    self.cmd_response.SetRequest(1, 2)
+    mock_pb = mock.MagicMock()
+    self.cmd_response._progressbar = mock_pb
+
+    # Complete row 0 only.
+    self.cmd_response.AddResponse(
+        inventory.Response(1, 'device_name', 'cmd1', 'data', '')
+    )
+    self.assertEqual(([1], ''), self.cmd_response.GetRow())
+    mock_pb.Finish.assert_not_called()
+
+    # Complete row 1.
+    self.cmd_response.AddResponse(
+        inventory.Response(2, 'device_name', 'cmd2', 'data', '')
+    )
+    self.assertEqual(([2], ''), self.cmd_response.GetRow())
+    mock_pb.Finish.assert_called_once()
 
 
 if __name__ == '__main__':
