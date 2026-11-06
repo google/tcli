@@ -14,13 +14,11 @@
 
 """Unittest for textfsm module."""
 
+from io import StringIO  # pylint: disable=g-importing-member
 import unittest
-from io import StringIO    # pylint: disable=g-importing-member
 
 from absl import flags
-
 from tcli.tcli_textfsm import textfsm
-
 
 FLAGS = flags.FLAGS
 
@@ -30,34 +28,43 @@ class UnitTestFSM(unittest.TestCase):
 
   def testKey(self):
 
-    tplt = ('Value Required boo (on.)\n'
-            'Value Required,Key hoo (on.)\n\n'
-            'Start\n  ^$boo -> Continue\n  ^$hoo -> Record')
+    tplt = (
+        'Value Required boo (on.)\n'
+        'Value Required,Key hoo (on.)\n\n'
+        'Start\n  ^$boo -> Continue\n  ^$hoo -> Record'
+    )
 
     # Explicit default.
     t = textfsm.TextFSM(StringIO(tplt))
-    self.assertTrue(t._GetValue('hoo'))
-    self.assertIn('Key', t._GetValue('hoo').OptionNames())                      # type: ignore
-    self.assertTrue(t._GetValue('boo'))
-    self.assertNotIn('Key', t._GetValue('boo').OptionNames())                   # type: ignore
+    hoo_val = t._GetValue('hoo')
+    self.assertIsNotNone(hoo_val)
+    self.assertIn('Key', hoo_val.OptionNames())
+    boo_val = t._GetValue('boo')
+    self.assertIsNotNone(boo_val)
+    self.assertNotIn('Key', boo_val.OptionNames())
 
-    tplt = ('Value Required boo (on.)\n'
-            'Value Verbose,Key hoo (on.)\n\n'
-            'Start\n  ^$boo -> Continue\n  ^$hoo -> Record')
-    self.assertRaises(textfsm.textfsm.TextFSMTemplateError, textfsm.TextFSM,
-                      StringIO(tplt))
+    tplt = (
+        'Value Required boo (on.)\n'
+        'Value Verbose,Key hoo (on.)\n\n'
+        'Start\n  ^$boo -> Continue\n  ^$hoo -> Record'
+    )
+    self.assertRaises(
+        textfsm.textfsm.TextFSMTemplateError, textfsm.TextFSM, StringIO(tplt)
+    )
 
   def testVerbose(self):
 
     # Suppress second column.
-    tplt = ('Value Required boo (on.)\n'
-            'Value Filldown,Required,Verbose hoo (on.)\n\n'
-            'Start\n  ^$boo -> Continue\n  ^$hoo -> Record')
+    tplt = (
+        'Value Required boo (on.)\n'
+        'Value Filldown,Required,Verbose hoo (on.)\n\n'
+        'Start\n  ^$boo -> Continue\n  ^$hoo -> Record'
+    )
 
     t = textfsm.TextFSM(StringIO(tplt), verbose=False)
     data = 'one\non0'
     result = t.ParseText(data)
-    self.assertEqual(str(result), ("[['one'], ['on0']]"))
+    self.assertEqual(str(result), "[['one'], ['on0']]")
     # The headers displayed is less too.
     self.assertEqual(t.header, ['boo'])
 
@@ -65,12 +72,14 @@ class UnitTestFSM(unittest.TestCase):
     t = textfsm.TextFSM(StringIO(tplt), verbose=True)
     data = 'one\non0'
     result = t.ParseText(data)
-    self.assertEqual(str(result), ("[['one', 'one'], ['on0', 'on0']]"))
+    self.assertEqual(str(result), "[['one', 'one'], ['on0', 'on0']]")
 
     # Required Verbose fields still apply.
-    tplt = ('Value Required boo (on.)\n'
-            'Value Required,Verbose hoo (tw.)\n\n'
-            'Start\n  ^$boo -> Continue\n  ^$hoo -> Record')
+    tplt = (
+        'Value Required boo (on.)\n'
+        'Value Required,Verbose hoo (tw.)\n\n'
+        'Start\n  ^$boo -> Continue\n  ^$hoo -> Record'
+    )
 
     t = textfsm.TextFSM(StringIO(tplt), verbose=False)
     data = 'one\non0'
@@ -80,29 +89,36 @@ class UnitTestFSM(unittest.TestCase):
   def testBlank(self):
 
     # Value may be matched by 'boo' but are never retained.
-    tplt = ('Value Required boo (one)\n'
-            'Value Blank hoo (two)\n\n'
-            'Start\n  ^$boo $hoo -> Record')
+    tplt = (
+        'Value Required boo (one)\n'
+        'Value Blank hoo (two)\n\n'
+        'Start\n  ^$boo $hoo -> Record'
+    )
 
     t = textfsm.TextFSM(StringIO(tplt))
     data = 'one two'
     result = t.ParseText(data)
-    self.assertEqual(str(result), ("[['one', '']]"))
+    self.assertEqual(str(result), "[['one', '']]")
     # The headers displayed is for both.
     self.assertEqual(t.header, ['boo', 'hoo'])
 
     # Blank values can have no other options
-    tplt = ('Value Required boo (one)\n'
-            'Value Blank,Verbose hoo (two)\n\n'
-            'Start\n  ^$boo $hoo -> Record')
-    self.assertRaises(textfsm.textfsm.TextFSMTemplateError, textfsm.TextFSM,
-                      StringIO(tplt))
+    tplt = (
+        'Value Required boo (one)\n'
+        'Value Blank,Verbose hoo (two)\n\n'
+        'Start\n  ^$boo $hoo -> Record'
+    )
+    self.assertRaises(
+        textfsm.textfsm.TextFSMTemplateError, textfsm.TextFSM, StringIO(tplt)
+    )
 
   def testError(self):
 
-    tplt = ('Value Required boo (on.)\n'
-            'Value Filldown,Required hoo (on.)\n\n'
-            'Start\n  ^$boo -> Continue\n  ^$hoo -> Error')
+    tplt = (
+        'Value Required boo (on.)\n'
+        'Value Filldown,Required hoo (on.)\n\n'
+        'Start\n  ^$boo -> Continue\n  ^$hoo -> Error'
+    )
 
     t = textfsm.TextFSM(StringIO(tplt))
     data = 'one'
@@ -110,9 +126,11 @@ class UnitTestFSM(unittest.TestCase):
     self.assertRaises(textfsm.TextFSMError, t.ParseText, data)
 
   def testDump(self):
-    tplt = ('Value Required boo (on.)\n'
-            'Value Required hoo (of.)\n\n'
-            'Start\n  ^${boo}\n  ^${hoo} -> Record')
+    tplt = (
+        'Value Required boo (on.)\n'
+        'Value Required hoo (of.)\n\n'
+        'Start\n  ^${boo}\n  ^${hoo} -> Record'
+    )
 
     data = 'one\noff\n'
     t = textfsm.TextFSM(StringIO(tplt))

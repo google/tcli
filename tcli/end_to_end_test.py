@@ -20,9 +20,7 @@ import unittest
 from unittest import mock
 
 from absl import flags
-
 from tcli import tcli_lib as tcli
-
 
 tcli.inventory = importlib.import_module('tcli.inventory_csv')
 tcli.accessor = importlib.import_module('tcli.accessor_canned')
@@ -30,15 +28,13 @@ FLAGS = flags.FLAGS
 
 # Test outputs.
 HEADER = '#!# cat %s #!#'
-OUTPUT_A = ('Host, ColAa, ColAb\n'
-            'device_a, hello, world\n'
-            'device_b, HELLO, WORLD\n')
-OUTPUT_B = ('Host, ColBa, ColBb\n'
-            'device_a, foo, bar\n'
-            'device_b, FOO, BAR\n')
+OUTPUT_A = (
+    'Host, ColAa, ColAb\ndevice_a, hello, world\ndevice_b, HELLO, WORLD\n'
+)
+OUTPUT_B = 'Host, ColBa, ColBb\ndevice_a, foo, bar\ndevice_b, FOO, BAR\n'
 
 
-#TODO(harro): Expand tests here to make this an automated UAT.
+# TODO: Expand tests here to make this an automated UAT.
 
 
 class UnitTestTCLIEndToEnd(unittest.TestCase):
@@ -46,21 +42,26 @@ class UnitTestTCLIEndToEnd(unittest.TestCase):
   @classmethod
   def setUpClass(cls):
     super(UnitTestTCLIEndToEnd, cls).setUpClass()
-    tcli.FLAGS([__file__,])
+    tcli.FLAGS([
+        __file__,
+    ])
     # Stub out as little as possible.
     tcli.command_response.tqdm = mock.MagicMock()
 
   @classmethod
   def tearDownClass(cls):
+    tcli.inventory = importlib.import_module('tcli.inventory_base')
     super(UnitTestTCLIEndToEnd, cls).tearDownClass()
 
   def setUp(self):
     super(UnitTestTCLIEndToEnd, self).setUp()
     tcli.FLAGS.template_dir = os.path.join(
-      os.path.dirname(__file__), 'testdata')
+        os.path.dirname(__file__), 'testdata'
+    )
     # Read some runtime commands from there.
     tcli.FLAGS.config_file = os.path.join(
-      os.path.dirname(__file__), 'testdata', 'rc_file')
+        os.path.dirname(__file__), 'testdata', 'rc_file'
+    )
 
   def testSendReceiveCommandInteractive(self):
 
@@ -81,13 +82,15 @@ class UnitTestTCLIEndToEnd(unittest.TestCase):
       self.assertListEqual(['device_a', 'device_b'], tcli_obj.device_list)
       tcli_obj._ParseCommands('cat a')
       tcli_obj._ParseCommands('/X ^')
-      self.assertListEqual(['device_a', 'device_b', 'device_c'],
-                           tcli_obj.device_list)
+      self.assertListEqual(
+          ['device_a', 'device_b', 'device_c'], tcli_obj.device_list
+      )
 
       mock_print.assert_has_calls([
           mock.call("Invalid escape command 'bogus'.", msgtype='warning'),
           mock.call(HEADER % 'a', 'title'),
-          mock.call(OUTPUT_A)])
+          mock.call(OUTPUT_A),
+      ])
 
   def testSendReceiveCommandNonInteractive(self):
 
@@ -97,29 +100,35 @@ class UnitTestTCLIEndToEnd(unittest.TestCase):
     with mock.patch.object(tcli.TCLI, '_Print') as mock_print:
       tcli_obj = tcli.TCLI(interactive=False, commands='/display csv\ncat a')
 
-      mock_print.assert_has_calls([
-          mock.call(HEADER % 'a', 'title'), mock.call(OUTPUT_A)])
+      mock_print.assert_has_calls(
+          [mock.call(HEADER % 'a', 'title'), mock.call(OUTPUT_A)]
+      )
 
       # RC script ignored. Logging would be on otherwise.
       self.assertEqual(tcli_obj.log, '')
 
     # Commands as an arg of the TCLI object.
     with mock.patch.object(tcli.TCLI, '_Print') as mock_print:
-      tcli_obj = tcli.TCLI(interactive=False,
-                           commands='/display csv\ncat a\ncat b')
-
-      mock_print.assert_has_calls([
-          mock.call(HEADER % 'a', 'title'), mock.call(OUTPUT_A),
-          mock.call(HEADER % 'b', 'title'), mock.call(OUTPUT_B)])
-
-    # With inline TCLI commands.
-    with mock.patch.object(tcli.TCLI, '_Print') as mock_print:
-      tcli_obj = tcli.TCLI(interactive=False,
-                           commands='/display raw\ncat a //D csv')
+      tcli.TCLI(
+          interactive=False, commands='/display csv\ncat a\ncat b'
+      )
 
       mock_print.assert_has_calls([
           mock.call(HEADER % 'a', 'title'),
-          mock.call(OUTPUT_A)])
+          mock.call(OUTPUT_A),
+          mock.call(HEADER % 'b', 'title'),
+          mock.call(OUTPUT_B),
+      ])
+
+    # With inline TCLI commands.
+    with mock.patch.object(tcli.TCLI, '_Print') as mock_print:
+      tcli.TCLI(
+          interactive=False, commands='/display raw\ncat a //D csv'
+      )
+
+      mock_print.assert_has_calls(
+          [mock.call(HEADER % 'a', 'title'), mock.call(OUTPUT_A)]
+      )
 
 
 if __name__ == '__main__':

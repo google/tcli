@@ -14,16 +14,13 @@
 
 """tests command completer functions."""
 
-
 import unittest
 from unittest import mock
 
 from absl import flags
-
+from tcli import command_completer as completer
 from tcli import tcli_lib as tcli
 from tcli.tcli_textfsm import clitable
-
-from tcli import command_completer as completer
 
 APPEND = tcli.command_parser.APPEND
 FLAGS = flags.FLAGS
@@ -33,9 +30,11 @@ class UnitTestCompleter(unittest.TestCase):
   """Tests the TCLI class."""
 
   def setUp(self):
-      # Instantiate FLAGS global var.
-      tcli.FLAGS([__file__,])
-      return super().setUp()
+    # Instantiate FLAGS global var.
+    tcli.FLAGS([
+        __file__,
+    ])
+    return super().setUp()
 
   def testTCLICompleter(self):
     """Tests completing TCLI native commands."""
@@ -46,10 +45,12 @@ class UnitTestCompleter(unittest.TestCase):
 
     self.assertEqual(completer.TCLICompleter('/reco', 0, _cp), '/record')
     self.assertEqual(
-      completer.TCLICompleter('/reco', 1, _cp), f'/record{APPEND}')
+        completer.TCLICompleter('/reco', 1, _cp), f'/record{APPEND}'
+    )
     self.assertEqual(completer.TCLICompleter('/reco', 2, _cp), '/recordall')
     self.assertEqual(
-      completer.TCLICompleter('/reco', 3, _cp), f'/recordall{APPEND}')
+        completer.TCLICompleter('/reco', 3, _cp), f'/recordall{APPEND}'
+    )
     self.assertEqual(completer.TCLICompleter('/reco', 4, _cp), '/recordstop')
     self.assertIsNone(completer.TCLICompleter('/reco', 5, _cp))
     # Complete on command arguments.
@@ -63,7 +64,8 @@ class UnitTestCompleter(unittest.TestCase):
     self.tcli_obj.filter = 'default'
     clitable.CliTable.INDEX = {}
     self.tcli_obj.filter_engine = clitable.CliTable(
-        'default_index', template_dir=tcli.FLAGS.template_dir)
+        'default_index', template_dir=tcli.FLAGS.template_dir
+    )
     _fe = self.tcli_obj.filter_engine
 
     # Completions are alphabetical.
@@ -90,3 +92,16 @@ class UnitTestCompleter(unittest.TestCase):
     self.assertIsNone(completer.CmdCompleter('show int00 ', 1, _fe))
     self.assertEqual('.+', completer.CmdCompleter('show int01 brief ', 0, _fe))
     self.assertIsNone(completer.CmdCompleter('show int00 brief yes', 1, _fe))
+
+    # Multiple quoted arguments do not collapse unquoted middle tokens.
+    fake_fe = mock.MagicMock()
+    fake_fe.index.index = [
+        {'Command': 'cmd ".*" middle ".*" final'},
+        {'Command': '[invalid_regex next_token'},
+    ]
+    self.assertEqual(
+        'final',
+        completer.CmdCompleter('cmd "arg 1" middle "arg 2" ', 0, fake_fe),
+    )
+    # Malformed regex in index is safely skipped without raising re.error.
+    self.assertIsNone(completer.CmdCompleter('[invalid_regex ', 0, fake_fe))

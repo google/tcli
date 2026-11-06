@@ -13,16 +13,21 @@
 # permissions and limitations under the License.
 
 """Sends commands to devices via callbacks."""
-import typing
 
+from collections.abc import Callable
+
+# pylint: disable=g-importing-member
 from tcli.inventory_base import CmdRequest
+from tcli.inventory_base import Response
 
 DEADLINE = None
 
 
+# pylint: disable=unused-argument
 def SendRequests(
-    requests_callbacks: list[tuple[CmdRequest, typing.Callable]],
-    deadline: float | None=DEADLINE) -> None:
+    requests_callbacks: list[tuple[CmdRequest, Callable[[Response], None]]],
+    deadline: float | None = DEADLINE,
+) -> None:
   """Submits command requests to device manager.
 
   Submit the command requests to the device manager for resolution.
@@ -34,9 +39,10 @@ def SendRequests(
   is to be executed by the device manager.
 
   Args:
-    requests_callbacks: List of tuples.
-      Each tuple pairs a request object with a callback function.
+    requests_callbacks: List of tuples. Each tuple pairs a request object with a
+      callback function.
     deadline: An optional int, the deadline to set when sending the request.
+
   Returns:
     None
   """

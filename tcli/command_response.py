@@ -14,16 +14,16 @@
 
 """Stores response results and current state for device inventory Callback.
 
-  Used to collate returned responses prior to outputing to the user.
+Used to collate returned responses prior to outputing to the user.
 """
 
+from collections.abc import Callable
 import threading
-
 import tqdm
+from typing import Any
+
 from absl import logging
-
 from tcli import inventory_base as inventory
-
 
 class CmdResponse(object):
   """Stores response results and current state for device inventory Callback.
@@ -52,46 +52,50 @@ class CmdResponse(object):
   """
 
   # Class will only few (one) instance, so class-wide locking is acceptable.
-  _lock = threading.Lock()    # Lock access to data to support async calls.
+  _lock = threading.Lock()  # Lock access to data to support async calls.
 
-  def Synchronized(func):    # type: ignore
+  # pylint: disable=no-self-argument
+  def Synchronized(
+      func: Callable[..., Any],
+  ) -> Callable[..., Any]:
     """Synchronization decorator."""
 
-    def Wrapper(main_obj, *args, **kwargs):
-      with main_obj._lock:          # pylint: disable=protected-access
-        return func(main_obj, *args, **kwargs)                                  # type: ignore
+    def Wrapper(main_obj: 'CmdResponse', *args: Any, **kwargs: Any) -> Any:
+      with main_obj._lock:  # pylint: disable=protected-access
+        return func(main_obj, *args, **kwargs)
+
     return Wrapper
 
-  @Synchronized # type: ignore
   def __init__(self):
     """Init starting values."""
+    self._lock = threading.Lock()
+    with self._lock:
+      self._pipe = {}  # Client side pipe function. Indexed on row id.
+      self._results = {}  # All response objects indexed by uid.
+      self._row_index = {}  # List of uid indexed by row.
+      self._row_response = {}  # List of responses indexed by row.
+      self._uid_index = {}  # Which row a uid response corresponds to.
+      self._current_row = 0  # Current row index of requests being returned.
+      self._response_count = 0  # Total count of received responses.
+      self.done = threading.Event()
+      # Graphic to indicate progress receiving responses.
+      self._progressbar = None
 
-    self._pipe = {}             # Client side pipe function. Indexed on row id.
-    self._results = {}          # All response objects indexed by uid.
-    self._row_index = {}        # List of uid indexed by row.
-    self._row_response = {}     # List of responses indexed by row.
-    self._uid_index = {}        # Which row a uid response corresponds to.
-    self._current_row = 0       # Current row index of requests being returned.
-    self._response_count = 0    # Total count of received responses.
-    self.done = threading.Event()
-    # Graphic to indicate progress receiving responses.
-    self._progressbar = None
-
-  @Synchronized # type: ignore
+  @Synchronized
   def InitCommandRow(self, command_row: int, pipe: str) -> None:
     """Initialise data for a new row, each row corresponds to a command.
 
     Args:
       command_row: int, the row number for the current command.
-      pipe: str the rhs of the commandline that output is to be piped into.
-            The pipe is not sent to the target so we track it here.
+      pipe: str the rhs of the commandline that output is to be piped into. The
+        pipe is not sent to the target so we track it here.
     """
 
     self._row_index[command_row] = []
     self._row_response[command_row] = []
     self._pipe[command_row] = pipe
 
-  @Synchronized # type: ignore
+  @Synchronized
   def SetRequest(self, command_row: int, request_uid: int) -> None:
     """Maps uid returned by inventory class to a row number and result.
 
@@ -104,13 +108,13 @@ class CmdResponse(object):
     self._uid_index[request_uid] = command_row
     self._row_index[command_row].append(request_uid)
 
-  @Synchronized # type: ignore
+  @Synchronized
   def AddResponse(self, response: inventory.Response) -> bool:
     """Add response to results table.
 
     Args:
       response: obj, returned by inventory class, contains the targets response.
-                we only care that it has a 'uid' attribute.
+        we only care that it has a 'uid' attribute.
 
     Returns:
       True if we were expecting a response with this uid
@@ -120,8 +124,9 @@ class CmdResponse(object):
     if response.uid not in self._uid_index:
       # Response with an unexpected uid. This can be the case if outstanding
       # requests are interrupted - Silently discard.
-      logging.warning("Discarded response: '%s', not expected (stale?)",
-                      response.uid)
+      logging.warning(
+          "Discarded response: '%s', not expected (stale?)", response.uid
+      )
       return False
 
     # Add to the response object to results table.
@@ -137,7 +142,7 @@ class CmdResponse(object):
       self._progressbar.update()
     return True
 
-  @Synchronized # type: ignore
+  @Synchronized
   def GetRow(self) -> tuple[list[int], str]:
     """Return current row if fully populated with results.
 
@@ -148,31 +153,39 @@ class CmdResponse(object):
     """
 
     # Have we received all responses for the current row.
-    if (self._current_row in self._row_response and
-        len(self._row_response[self._current_row]) ==
-        len(self._row_index[self._current_row])):
+    if self._current_row in self._row_response and len(
+        self._row_response[self._current_row]
+    ) == len(self._row_index[self._current_row]):
       logging.info(
-        'Row %s was complete (size %s) and returned.',
-        self._current_row, len(self._row_response[self._current_row]))
+          'Row %s was complete (size %s) and returned.',
+          self._current_row,
+          len(self._row_response[self._current_row]),
+      )
       # Assemble the results for the row and any corresponding pipe content.
       result = (
-        self._row_response[self._current_row], self._pipe[self._current_row])
+          self._row_response[self._current_row],
+          self._pipe[self._current_row],
+      )
       # Advance the current row.
       self._current_row += 1
-      # Reset the progress indicator as there is results to display.
-      if self._progressbar is not None:
-        self._progressbar.close()
+      # Reset the progress indicator when all expected responses have arrived.
+      if self._progressbar is not None and self._response_count >= len(
+          self._results
+      ):
+        self._progressbar.Finish()
+        self._progressbar = None
       # return the row.
       return result
-    
+
     # Have we returned the last row of results, if so then we are done?
     if len(self._results) == self._response_count:
       logging.debug('GetRow: All results returned.')
       self.done.set()
-  
+
     # Either still waiting on entries in current row, or we're done.
     return ([], '')
 
+  @Synchronized
   def GetResponse(self, uid: int) -> inventory.Response|None:
     """Returns response object for a given uid."""
 
@@ -182,6 +195,7 @@ class CmdResponse(object):
       logging.error(
         'Invalid UID: %s, possible values: %s.', uid, str(self._results))
 
+  @Synchronized
   def StartIndicator(self, message: str = '#! Receiving:') -> None:
     """Starts a progress indicator to indicate receiving of requests."""
     self._progressbar = tqdm.tqdm(list(range(len(self._results))), desc=message)

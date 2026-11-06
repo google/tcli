@@ -25,13 +25,21 @@ for each input entity.
 https://github.com/google/textfsm
 """
 
-
 import json
 from absl import flags
 import textfsm
-from textfsm import TextFSMError          # pylint: disable=unused-import
-from textfsm import TextFSMTemplateError  # pylint: disable=unused-import
-from textfsm import Usage                 # pylint: disable=unused-import
+# pylint: disable=g-importing-member
+from textfsm import TextFSMError
+from textfsm import TextFSMTemplateError
+from textfsm import UsageError
+
+__all__ = [
+    'TextFSM',
+    'TextFSMOptions',
+    'TextFSMError',
+    'TextFSMTemplateError',
+    'UsageError',
+]
 
 FLAGS = flags.FLAGS
 
@@ -45,7 +53,8 @@ class TextFSMOptions(textfsm.TextFSMOptions):
     def OnCreateOptions(self):
       if len(self.value.options) != 1:
         raise textfsm.TextFSMTemplateError(
-            'Blank is a mutually exclusive option.')
+            'Blank is a mutually exclusive option.'
+        )
 
     def OnSaveRecord(self):
       self.value.value = ''
@@ -56,7 +65,8 @@ class TextFSMOptions(textfsm.TextFSMOptions):
     def OnCreateOptions(self):
       if 'Key' in self.value.OptionNames():
         raise textfsm.TextFSMTemplateError(
-            'Options "Key" and "Verbose" are mutually exclusive')
+            'Options "Key" and "Verbose" are mutually exclusive'
+        )
 
     def OnGetValue(self):
       # pylint: disable=protected-access
@@ -74,7 +84,8 @@ class TextFSMOptions(textfsm.TextFSMOptions):
     def OnCreateOptions(self):
       if 'Verbose' in self.value.OptionNames():
         raise textfsm.TextFSMTemplateError(
-            'Options "Key" and "Verbose" are mutually exclusive')
+            'Options "Key" and "Verbose" are mutually exclusive'
+        )
 
 
 class TextFSM(textfsm.TextFSM):
@@ -83,8 +94,7 @@ class TextFSM(textfsm.TextFSM):
   Options useful for formatting and displaying of the data.
   """
 
-  def __init__(self, template, verbose=True,
-               options_class=TextFSMOptions):
+  def __init__(self, template, verbose=True, options_class=TextFSMOptions):
     """Initialises and also parses the template file."""
 
     # Display 'all' or 'only some' of the columns.
@@ -105,4 +115,4 @@ class TextFSM(textfsm.TextFSM):
     output = [json.dumps(self.header, separators=(',', ':'))]
     for row in self._result:
       output.append(json.dumps(row, separators=(',', ':')))
-    return  '\n'.join(output)
+    return '\n'.join(output)

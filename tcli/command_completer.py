@@ -14,6 +14,7 @@
 
 """Commandline completion functions for interactive TCLI."""
 
+import functools
 import re
 
 from tcli import command_parser
@@ -21,7 +22,16 @@ from tcli import command_parser
 _COMPLETER_LIST = []
 
 
-def CmdCompleter(full_line: str, state: int, filter_engine) -> str|None:
+@functools.cache
+def _CompilePattern(pattern: str) -> re.Pattern[str] | None:
+  """Compiles a regex pattern for command completion, returning None if invalid."""
+  try:
+    return re.compile(pattern)
+  except re.error:
+    return None
+
+
+def CmdCompleter(full_line: str, state: int, filter_engine) -> str | None:
   """Commandline completion used by readline library."""
 
   global _COMPLETER_LIST
@@ -31,11 +41,11 @@ def CmdCompleter(full_line: str, state: int, filter_engine) -> str|None:
     # This could break legitimate regexps but since these are completion
     # candidates, That breakage is cosmetic.
     _reg_exp_str = r'\((?P<value>.*)\)\?'
-    clean_token = re.sub(_reg_exp_str, '\g<value>', token)                      # type: ignore
+    clean_token = re.sub(_reg_exp_str, r'\g<value>', token)
     # Repeat until all nested (...)? are removed.
     while token != clean_token:
       token = clean_token
-      clean_token = re.sub(_reg_exp_str, '\g<value>', clean_token)              # type: ignore
+      clean_token = re.sub(_reg_exp_str, r'\g<value>', clean_token)
     return token
 
   # First invocation, so build candidate list and cache for re-use.
@@ -47,9 +57,9 @@ def CmdCompleter(full_line: str, state: int, filter_engine) -> str|None:
     # What has been typed so far.
 
     # Collapse quotes to remove any whitespace within.
-    cleaned_line = re.sub(r'\".+\"', '""', full_line)
-    cleaned_line = re.sub(r'\'.+\'', '""', cleaned_line)
-    # Remove double spaces etc
+    cleaned_line = re.sub(r'"[^"]*"', '""', full_line)
+    cleaned_line = re.sub(r"'[^']*'", '""', cleaned_line)
+    # Remove double spaces etc.
     cleaned_line = re.sub(r'\s+', ' ', cleaned_line)
 
     # Are we part way through typing a word, or a word boundary.
@@ -68,7 +78,7 @@ def CmdCompleter(full_line: str, state: int, filter_engine) -> str|None:
         current_word = line_tokens.pop()
 
     # Compare with table of possible command matches in filter_engine.
-    for row in filter_engine.index.index:                                       # type: ignore
+    for row in filter_engine.index.index:
       # Split the command match into tokens.
       cmd_tokens = row['Command'].split(' ')
       # Does the line match the partial list of tokens.
@@ -76,9 +86,10 @@ def CmdCompleter(full_line: str, state: int, filter_engine) -> str|None:
         # Currently a blank line so the first token is what we want.
         token = cmd_tokens[0]
       # Does our line match this command completion candidate.
-      elif (
-        len(cmd_tokens) > len(line_tokens) and
-        re.match(' '.join(cmd_tokens[:len(line_tokens)]), cleaned_line)):
+      elif len(cmd_tokens) > len(line_tokens):
+        pattern = _CompilePattern(' '.join(cmd_tokens[: len(line_tokens)]))
+        if not pattern or not pattern.match(cleaned_line):
+          continue
         # Take the token from off the end of the Completer command.
         token = cmd_tokens[len(line_tokens)]
       else:
@@ -91,14 +102,13 @@ def CmdCompleter(full_line: str, state: int, filter_engine) -> str|None:
         _completer_set.add(token)
     _COMPLETER_LIST = list(_completer_set)
     _COMPLETER_LIST.sort()
-        
 
   if state < len(_COMPLETER_LIST):
     return _COMPLETER_LIST[state]
   return None
 
 
-def TCLICompleter(full_line: str, state: int, cli_parser) -> str|None:
+def TCLICompleter(full_line: str, state: int, cli_parser) -> str | None:
   """Command line completion for escape commands."""
 
   # Remove the leading slash.
@@ -107,8 +117,8 @@ def TCLICompleter(full_line: str, state: int, cli_parser) -> str|None:
   # We have a complete TCLI command.
   # Ignore get_completer_delims, we only use spaces as separators.
   if ' ' in full_line:
-    word_sep = full_line.index(' ')         # Word boundary.
-    (cmd_name, arg_string) = (full_line[:word_sep], full_line[word_sep +1:])
+    word_sep = full_line.index(' ')  # Word boundary.
+    cmd_name, arg_string = (full_line[:word_sep], full_line[word_sep + 1 :])
 
     # If we have a shortname, expand it before continuing.
     if len(cmd_name) == 1:
@@ -130,7 +140,7 @@ def TCLICompleter(full_line: str, state: int, cli_parser) -> str|None:
   for cmd_name in cli_parser:
     if cmd_name.startswith(full_line):
       completer_list.append(cmd_name)
-      if (cmd_name in cli_parser and cli_parser[cmd_name].append):
+      if cmd_name in cli_parser and cli_parser[cmd_name].append:
         # Add the apend option of the command to the list
         completer_list.append(cmd_name + command_parser.APPEND)
   completer_list.sort()

@@ -14,18 +14,17 @@
 
 """Parses TCLI command string and calls handler methods."""
 
-
 import re
 import shlex
 import typing
 
 # Command start with a slash, inline commands a double slash
 SLASH = '/'
-INLINE = SLASH*2
+INLINE = SLASH * 2
 # Command suffix for denoting appending values.
 APPEND = '+'
 # Indent for help strings.
-I = '\n' + ' '*4
+I = '\n' + ' ' * 4
 
 
 class Error(Exception):
@@ -71,12 +70,22 @@ class CommandParser(dict):
     # The command expects a bool and flips the value if unspecified.
     toggle = property(lambda self: self.attr['toggle'])
 
-  def RegisterCommand(self, command_name:str, help_str:str, short_name:str='', 
-                      min_args:int=0, max_args:int=1, default_value=None, 
-                      append:bool=False, inline:bool=False, raw_arg:bool=False,
-                      regexp:bool=False, toggle:bool=False,
-                      handler:typing.Callable=lambda: None,
-                      completer:typing.Callable=lambda: None) -> None:
+  def RegisterCommand(
+      self,
+      command_name: str,
+      help_str: str,
+      short_name: str = '',
+      min_args: int = 0,
+      max_args: int = 1,
+      default_value=None,
+      append: bool = False,
+      inline: bool = False,
+      raw_arg: bool = False,
+      regexp: bool = False,
+      toggle: bool = False,
+      handler: typing.Callable[..., typing.Any] = lambda: None,
+      completer: typing.Callable[..., typing.Any] = lambda: None,
+  ) -> None:
     """Adds support for command to parser.
 
     Args:
@@ -107,7 +116,7 @@ class CommandParser(dict):
         'regexp': regexp,
         'toggle': toggle,
         'handler': handler,
-        'completer': completer
+        'completer': completer,
     })
 
   def UnRegisterCommand(self, command_name: str) -> None:
@@ -135,7 +144,7 @@ class CommandParser(dict):
           and a bool for if the command had an append suffix or not.
     """
 
-    def _ExpandShortCommand(short_name: str) -> str|None:
+    def _ExpandShortCommand(short_name: str) -> str | None:
       """Find full command name for a single command letter."""
       for command_name in self:
         if self[command_name].short_name == short_name:
@@ -144,21 +153,20 @@ class CommandParser(dict):
     # Short commands are non-alphabetic or capitalised,
     # long names are always lowercase.
     append = False
-    command_name = None
     command_name = _ExpandShortCommand(line[0])
     # Found short command.
     if command_name:
       #  Strip short command from line.
       line = line[1:]
       # Strip append symbol from input and reattach to command.
-      if line and line[0] is APPEND:
+      if line and line[0] == APPEND:
         command_name += APPEND
         line = line[1:]
     else:
       # Separate command from subsequent arguments.
       if ' ' in line:
         command_sep = line.index(' ')
-        (command_name, line) = (line[:command_sep], line[command_sep :])
+        command_name, line = (line[:command_sep], line[command_sep:])
       else:
         # No arguments, just the command.
         command_name = line
@@ -173,16 +181,18 @@ class CommandParser(dict):
     return (command_name, line, append)
 
   def ExecHandler(
-      self, command_name:str, args:list[str], append:bool) -> str|None:
+      self, command_name: str, args: list[str], append: bool
+  ) -> str | None:
     """Execute the handler associated with this command."""
 
     if not self[command_name].handler:
-      raise ParseError('Unable to exec handler, "%s" has no handler.' %
-                       command_name)
+      raise ParseError(
+          'Unable to exec handler, "%s" has no handler.' % command_name
+      )
 
     return self[command_name].handler.__call__(command_name, args, append)
 
-  def ExecWithDefault(self, command_name: str) -> str|None:
+  def ExecWithDefault(self, command_name: str) -> str | None:
     """Executes command handler with the default value.
 
     Args:
@@ -210,56 +220,58 @@ class CommandParser(dict):
         value = 'off'
     # Confirm that command expects an argument.
     if not self[command_name].max_args:
-      raise ParseError('Unable to set default, "%s" expects no arguments.' %
-                       command_name)
+      raise ParseError(
+          'Unable to set default, "%s" expects no arguments.' % command_name
+      )
 
     return self.ExecHandler(command_name, [value], False)
 
   def ExtractInlineCommands(self, command: str) -> tuple[str, list[str]]:
-    f"""Separate out inline commmand overrides from command input.
+    """Separate out inline command overrides from command input.
 
     Converts something like:
-      'cat alpha | grep abc || grep xyz {INLINE}display csv {INLINE}log bufname'
+      'cat alpha | grep abc || grep xyz //display csv //log bufname'
     Into:
       command = ['cat alpha | grep ablc || grep xyz']
       display = 'csv'
       log = 'buffername'
 
-    A sequence with '{INLINE}' that is not preceded by a space and part of a
+    A sequence with '//' that is not preceded by a space and part of a
     valid command is treated as part of the command body and no further matches
     are made. This determination is done from right to left.
 
     e.g.
-      'show flash:{INLINE}file_name {INLINE}bogus {INLINE}log filelist'
+      'show flash://file_name //bogus //log filelist'
     Converts into:
-      ('show flash:{INLINE}file_name {INLINE}bogus', ('log filelist',))
+      ('show flash://file_name //bogus', ('log filelist',))
 
     Args:
       command: str, command issued to target devices.
 
     Returns:
-      List, the command line (minus inline commands) and a tupe of inline the
+      List, the command line (minus inline commands) and a tuple of inline the
       TCLI commands extracted.
     """
 
     token_list = command.split(f' {INLINE}')
     # Do we need to extract inline commands at all?
-    if len(token_list) == 1: return (command, [])
+    if len(token_list) == 1:
+      return (command, [])
 
-    (command_str, token_list) = (token_list[0], token_list[1:])
+    command_str, token_list = (token_list[0], token_list[1:])
     inline_commands = []
     command_suffix = ''
     index = 0
     # Work from right to left.
     for i in range(len(token_list), 0, -1):
       index = i
-      token = token_list[i -1]
+      token = token_list[i - 1]
       try:
         # 'exit' in this context stops any further inline command parsing.
         if token == 'exit':
           # Any inline commands to the left are treated as regular input.
           # Drop 'exit' from the inline commands, it has no other purpose here.
-          token_list.pop(index -1)
+          token_list.pop(index - 1)
           break
         # Confirm that token parses cleanly.
         self.ParseCommandLine(token)
@@ -267,12 +279,12 @@ class CommandParser(dict):
       except (ValueError, ParseError):
         # If a token doesn't parse then it and all tokens to the left are
         # returned back to the commandline.
-        index += 1    # Including the current one.
+        index += 1  # Including the current one.
         break
 
-    if index > 1:     # True if we broke early from the above for loop.
+    if index > 1:  # True if we broke early from the above for loop.
       # Add back any remaining unparsed tokens to the command string.
-      command_suffix = f' {INLINE}' + f' {INLINE}'.join(token_list[:index-1])
+      command_suffix = f' {INLINE}' + f' {INLINE}'.join(token_list[: index - 1])
 
     return (command_str + command_suffix, inline_commands)
 
@@ -298,16 +310,17 @@ class CommandParser(dict):
     # Split out quoted and non-quoted text.
     unquoted_str = """([^"']+)"""
     sgl_quoted_str = """('[^']*')"""
-    dbl_quoted_str = '''("[^"]*")'''
+    dbl_quoted_str = """("[^"]*")"""
     token_list = re.findall(
-      f'{unquoted_str}|{dbl_quoted_str}|{sgl_quoted_str}', command)
+        f'{unquoted_str}|{dbl_quoted_str}|{sgl_quoted_str}', command
+    )
 
     pipes = '([|]+)'
     not_pipes = '([^|]+)'
     new_token_list = []
     # Further decompose the unquoted parts of the string.
     for index in range(len(token_list)):
-      (unquoted_str, _, _) = token_list[index]
+      unquoted_str, _, _ = token_list[index]
       if unquoted_str:
         # Split the unquoted part further, by pipes if present.
         token_sublist = re.findall(f'{pipes}|{not_pipes}', unquoted_str)
@@ -323,16 +336,18 @@ class CommandParser(dict):
     lhs_str = ''
     while sgl_pipe in new_token_list:
       pipe_index = new_token_list.index(sgl_pipe)
-      lhs_str += ''.join(new_token_list[:pipe_index +1])
-      new_token_list = new_token_list[pipe_index +1:]
+      lhs_str += ''.join(new_token_list[: pipe_index + 1])
+      new_token_list = new_token_list[pipe_index + 1 :]
 
     if dbl_pipe in new_token_list:
       pipe_index = new_token_list.index(dbl_pipe)
       lhs_str += ''.join(new_token_list[:pipe_index])
       # Remove 1st instance of double pipe.
-      new_token_list = new_token_list[pipe_index +1:]
+      new_token_list = new_token_list[pipe_index + 1 :]
       # Replace all subsequent instances with a single pipe.
-      new_token_list = [x if x != dbl_pipe else sgl_pipe for x in new_token_list ]
+      new_token_list = [
+          x if x != dbl_pipe else sgl_pipe for x in new_token_list
+      ]
     else:
       lhs_str += ''.join(new_token_list)
       new_token_list = []
@@ -376,10 +391,11 @@ class CommandParser(dict):
       ParseError: If command not registered, or arguments are invalid.
     """
 
-    if not line: raise ParseError('Missing escape command.')
-  
+    if not line:
+      raise ParseError('Missing escape command.')
+
     # Expand command into command name, args and it it is append or not.
-    (command_name, line, append) = self._CommandExpand(line)
+    command_name, line, append = self._CommandExpand(line)
 
     if command_name not in self:
       raise ParseError(f"Invalid escape command '{command_name}'.")
@@ -390,7 +406,8 @@ class CommandParser(dict):
 
     if append and not self[command_name].append:
       raise ParseError(
-          f"Command '{command_name}' does not support append mode.")
+          f"Command '{command_name}' does not support append mode."
+      )
 
     # Split remaining line into arguments.
     # Silently discard additional arguments.
@@ -398,15 +415,18 @@ class CommandParser(dict):
       arguments = shlex.split(line)
     except ValueError as error_message:
       raise ParseError(
-        f"Invalid string could not be parsed into arguments: '{error_message}'")
+          'Invalid string could not be parsed into arguments:'
+          f" '{error_message}'"
+      ) from error_message
 
-    if (len(arguments) < self[command_name].min_args or
-        len(arguments) > self[command_name].max_args):
+    if (
+        len(arguments) < self[command_name].min_args
+        or len(arguments) > self[command_name].max_args
+    ):
       raise ParseError(f'Invalid number of arguments, found: {len(arguments)}.')
 
     # Check if a command only expects (Alpha numeric) arguments.
-    if (not self[command_name].regexp and
-        not self[command_name].raw_arg):
+    if not self[command_name].regexp and not self[command_name].raw_arg:
       for arg in arguments:
         if re.search(r'\W', arg):
           raise ParseError('Arguments with alphanumeric characters only.')

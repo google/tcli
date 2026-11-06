@@ -41,9 +41,18 @@ from absl import flags
 from absl import logging
 
 from tcli import inventory_base
+# pylint: disable=g-importing-member
+from tcli.inventory_base import AuthError
 from tcli.inventory_base import CmdRequest
-from tcli.inventory_base import AuthError       # pylint: disable=unused-import
-from tcli.inventory_base import InventoryError  # pylint: disable=unused-import
+from tcli.inventory_base import InventoryError
+
+__all__ = [
+    'Inventory',
+    'AuthError',
+    'CmdRequest',
+    'CmdResponse',
+    'InventoryError',
+]
 
 ## CHANGEME
 ## The fields in the CSV that we want content to be filtered on.
@@ -55,14 +64,21 @@ from tcli.inventory_base import InventoryError  # pylint: disable=unused-import
 ## prefixed with an 'x' to be used for inverse matching (exclusions).
 DEVICE_ATTRIBUTES = inventory_base.DEVICE_ATTRIBUTES
 DEVICE_ATTRIBUTES['pop'] = inventory_base.Attribute(
-    'pop', '', [],
-    '\n    Limit device lists to specific pop/s')
+    'pop', '', [], '\n    Limit device lists to specific pop/s'
+)
 DEVICE_ATTRIBUTES['realm'] = inventory_base.Attribute(
-    'realm', 'lab', ['prod', 'lab'],
-    '\n    Limit the device list to a specific realm/s.')
+    'realm',
+    'lab',
+    ['prod', 'lab'],
+    '\n    Limit the device list to a specific realm/s.',
+)
 DEVICE_ATTRIBUTES['vendor'] = inventory_base.Attribute(
-    'vendor', '', ['cisco', 'juniper'],
-    '\n    Limit device lists to a specific vendor/s', display_case='title')
+    'vendor',
+    '',
+    ['cisco', 'juniper'],
+    '\n    Limit device lists to a specific vendor/s',
+    display_case='title',
+)
 
 # Set here if known.
 # In the case here this will be overwritten once the CSV content is known.
@@ -71,39 +87,46 @@ DEVICE = inventory_base.DEVICE
 ## CHANGEME
 ## To get up and running we use test data. Replace this path with the location
 ## of the device inventory CSV file that you wish to use.
-DEFAULT_CSV_FILE = os.path.join(os.path.dirname(__file__),
-                                'testdata', 'test_devices')
+DEFAULT_CSV_FILE = os.path.join(
+    os.path.dirname(__file__), 'testdata', 'test_devices'
+)
 
 ## CHANGEME
 ## Any devices to exclude by default for all users, should be defined here.
 ## Add to the end of the list any additional expressions that should be
 ## implicitly filtered by default.
-DEFAULT_XTARGETS = ','.join([inventory_base.DEFAULT_XTARGETS,])
+DEFAULT_XTARGETS = ','.join([
+    inventory_base.DEFAULT_XTARGETS,
+])
 
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string(
-    'inventory', DEFAULT_CSV_FILE,
-    'Location of file containing the CSV list of devices.')
+    'inventory',
+    DEFAULT_CSV_FILE,
+    'Location of file containing the CSV list of devices.',
+)
 
-# TODO(#38): Support using a different string for separating flags.
-flags.DEFINE_string('separator', ', ',
-                    'String sequence that separates entries in the CSV file.')
+# TODO(harro): Support using a different string for separating flags.
+flags.DEFINE_string(
+    'separator', ', ', 'String sequence that separates entries in the CSV file.'
+)
 
 CmdResponse = inventory_base.Response
+
 
 class Inventory(inventory_base.Inventory):
   """CSV Inventory Class.
 
-    Attributes:
-      source: String identifier of source of device inventory.
+  Attributes:
+    source: String identifier of source of device inventory.
   """
 
   SOURCE = 'csv'
 
   def _ParseDevicesFromCsv(
-      self, buf:typing.TextIO,
-      separator:str=',') -> dict[str, typing.NamedTuple]:
+      self, buf: typing.TextIO, separator: str = ','
+  ) -> dict[str, typing.NamedTuple]:
     """Parses buffer into tabular format.
 
     Strips off comments (preceded by '#').
@@ -154,37 +177,40 @@ class Inventory(inventory_base.Inventory):
     header_list = [l.strip() for l in header_list]
     if header_list[0] != 'device':
       raise ValueError(
-          'Column named "device" must be first column of header.\n'
-          'Found: "%s".' % header_str)
+          'Column named "device" must be first column of header.\nFound: "%s".'
+          % header_str
+      )
     # Strip device, it will be used for the index.
-    header_list = header_list[1 :]
+    header_list = header_list[1:]
     row_length = len(header_list)
     # Data format for a single device entry.
-    DEVICE = collections.namedtuple('Device', header_list)
+    device_cls = collections.namedtuple('Device', header_list)
 
-    # pylint: enable=invalid-name
     devices = {}
     # xreadlines would be better but not supported by StringIO for testing.
-    for row in buf:
+    for line in buf:
       # Support commented lines, provide '#' is first character of line.
-      row = row.strip()
-      if not row or row.startswith('#'):
+      line = line.strip()
+      if not line or line.startswith('#'):
         continue
-      row = row.split(separator)
-      # Strip excess whitespace.
-      row = [l.strip() for l in row]
-      (device_name, row) = (row[0], row[1 :])
+      fields: list[typing.Any] = [l.strip() for l in line.split(separator)]
+      device_name, row_values = (fields[0], fields[1:])
       if header_list[-1] == 'flags':
         # Provided the last header is 'flags' then accept extra columns.
         # Entries that trail on the rhs are gathered into a list under flags.
-        (device_flags, row) = (row[row_length -1:], row[:row_length -1])
-        row.append(device_flags) # type: ignore
+        device_flags, row_values = (
+            row_values[row_length - 1 :],
+            row_values[: row_length - 1],
+        )
+        row_values.append(device_flags)
       try:
-        devices[device_name] = DEVICE(*row)
-      except TypeError:
-        raise ValueError('Final column header must be "flags" if'
-                         ' rows are to be variable length.\n'
-                         'Found: %s' % header_str)
+        devices[device_name] = device_cls(*row_values)
+      except TypeError as exc:
+        raise ValueError(
+            'Final column header must be "flags" if'
+            ' rows are to be variable length.\n'
+            'Found: %s' % header_str
+        ) from exc
     logging.debug('Parsed "%s" devices from CSV file.', len(devices))
     return devices
 
