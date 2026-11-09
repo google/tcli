@@ -21,8 +21,8 @@ and displaying the results received from accessor for said remote devices.
 
 import copy
 import os
-import subprocess
 import shutil
+import subprocess
 import sys
 import tempfile
 import threading
@@ -40,7 +40,6 @@ from tcli import display
 from tcli import inventory_base as inventory
 from tcli import text_buffer
 from tcli.tcli_textfsm import clitable
-from textfsm import terminal
 from textfsm import texttable
 
 # pylint: disable=g-import-not-at-top
