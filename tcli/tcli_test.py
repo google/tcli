@@ -182,10 +182,10 @@ class UnitTestTCLI(unittest.TestCase):
 
     self.tcli_obj._FormatRow = mock.Mock()
 
-    # self.tcli_obj.Callback(
-    #   inventory.Response(99, "device_name", "command", "data", "error"))
-    # # Test that nonexistant uid trigger early return.
-    # self.assertFalse(self.tcli_obj.cmd_response._response_count)
+    self.tcli_obj._Callback(
+      inventory.Response(99, "device_name", "command", "data", "error"))
+    # Test that nonexistent uid triggers an early return.
+    self.assertFalse(self.tcli_obj.cmd_response._response_count)
 
     self.tcli_obj.cmd_response.InitCommandRow(0, '')
     self.tcli_obj.cmd_response.InitCommandRow(1, '')
@@ -747,7 +747,7 @@ class UnitTestTCLI(unittest.TestCase):
           "Invalid filter 'not_a_valid_filter'.", msgtype='warning'
       )
 
-  def testTCLIBufferAsignment(self):
+  def testTCLIBufferAssignment(self):
 
     # Ensure logging is clear
     self.tcli_obj.record = ''

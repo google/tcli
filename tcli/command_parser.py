@@ -394,7 +394,7 @@ class CommandParser(dict):
     if not line:
       raise ParseError('Missing escape command.')
 
-    # Expand command into command name, args and it it is append or not.
+    # Expand command into command name, args and if it is append or not.
     command_name, line, append = self._CommandExpand(line)
 
     if command_name not in self:
