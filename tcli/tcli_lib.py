@@ -123,6 +123,7 @@ flags.DEFINE_string(
     short_name='t',
 )
 
+
 class Error(Exception):
   """Base class for errors."""
 
@@ -215,10 +216,7 @@ class TCLI(object):
 
   def __copy__(self) -> 'TCLI':
     """Copies attributes from self to new tcli object."""
-    inv_copy = (
-        copy.copy(self.inventory)
-        if self.inventory is not None else None
-    )
+    inv_copy = copy.copy(self.inventory) if self.inventory is not None else None
     # Create new instance with existing inventory.
     tcli_obj = type(self)(inv=inv_copy)
     # TODO: Why does this break ParseCommands?
@@ -369,7 +367,14 @@ class TCLI(object):
 
       # Create command requests.
       for device in device_list:
-        req = inventory.CmdRequest(device, command, self.mode)
+        # Site specific factory method for creating CmdRequest.
+        # Required if the CmdRequest needs device specific details.
+        if isinstance(self.inventory, inventory.Inventory) and hasattr(
+            self.inventory, 'CreateCmdRequest'
+        ):
+          req = self.inventory.CreateCmdRequest(device, command, self.mode)
+        else:
+          req = inventory.CmdRequest(device, command, self.mode)
         # Track the order that commands are submitted.
         # Responses are received in any order and
         # we use the row ID to reassemble.
