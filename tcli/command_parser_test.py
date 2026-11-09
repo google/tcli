@@ -335,7 +335,7 @@ class CommandParserTest(unittest.TestCase):
         'hoo the line is too long',
     )
 
-    # Commnad with raw argument.
+    # Command with raw argument.
     self.cmd_parser.RegisterCommand(
         'foo', 'A help string.', short_name='F', raw_arg=True
     )

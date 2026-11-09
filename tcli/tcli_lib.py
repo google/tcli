@@ -203,7 +203,7 @@ class TCLI(object):
       self.inventory.RegisterCommands(self.cli_parser)
     command_register.RegisterCommands(self, self.cli_parser)
     command_register.SetFlagDefaults(self.cli_parser)
-    # If interactive then the user will input furhter commands.
+    # If interactive then the user will input further commands.
     # So we enable safe mode and apply the users .tclirc file.
     if self.interactive:
       # Set safe mode.

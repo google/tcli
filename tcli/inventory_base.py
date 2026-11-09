@@ -37,7 +37,7 @@ import tcli.command_parser as cp
 # Global vars so flags.FLAGS has inventroy intelligence in the main program.
 
 # Maximum number of devices that can be the recipient of a command.
-# Can (and should) be overriden in the child module or the command line.
+# Can (and should) be overridden in the child module or the command line.
 DEFAULT_MAXTARGETS = 50
 # System default for what device targets to exclude from matching.
 # Set this to avoid overly matching on devices that may rarely be an
@@ -741,7 +741,7 @@ class Inventory(object):
     return self._device_list
 
   def _AsyncLoad(self) -> None:
-    """Wrapper for calling FetchDevices from withing a thread."""
+    """Wrapper for calling FetchDevices from within a thread."""
 
     try:
       self._FetchDevices()

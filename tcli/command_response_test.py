@@ -155,7 +155,7 @@ class UnitTestCmdResponse(unittest.TestCase):
     self.cmd_response.InitCommandRow(1, 'testing')
 
     # Two devices, so two responses for each of the two rows.
-    # Hence four requet IDs: 1-4.
+    # Hence four request IDs: 1-4.
     self.cmd_response.SetRequest(1, 1)
     self.cmd_response.SetRequest(1, 2)
     # Responses for the first command have the higher IDs ... just because.
