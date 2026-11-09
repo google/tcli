@@ -219,7 +219,7 @@ class TCLI(object):
     inv_copy = copy.copy(self.inventory) if self.inventory is not None else None
     # Create new instance with existing inventory.
     tcli_obj = type(self)(inv=inv_copy)
-    # TODO: Why does this break ParseCommands?
+    # TODO(harro): Why does this break ParseCommands?
     # tcli_obj.__dict__.update(self.__dict__)
 
     tcli_obj.buffers = self.buffers
@@ -869,8 +869,8 @@ class TCLI(object):
         buf_file.write(content.encode('utf-8'))
         # Flush content so editor will see it.
         buf_file.flush()
-      # TODO: Support os.getenv('EDITOR', 'vi').
-      # TODO: Maybe catch exceptions here.
+      # TODO(harro): Support os.getenv('EDITOR', 'vi').
+      # TODO(harro): Maybe catch exceptions here.
       # Open file with vi.
       subprocess.run(
           ['vi', '-Z', '-n', '-u', 'NONE', '-U', 'NONE', '--', buf_file.name],
