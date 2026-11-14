@@ -75,7 +75,11 @@ class UnitTestCmdResponse(unittest.TestCase):
 
   def setUp(self):
     super(UnitTestCmdResponse, self).setUp()
-    command_response.threading.Lock = mock.MagicMock()
+    threading_stub = mock.Mock(wraps=command_response.threading)
+    threading_stub.Lock = mock.MagicMock()
+    self.enterContext(
+        mock.patch.object(command_response, 'threading', threading_stub)
+    )
     self.cmd_response = command_response.CmdResponse()
     # Set class variables to defaults.
     self.cmd_response.__init__()

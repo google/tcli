@@ -14,16 +14,16 @@
 
 """End to end system test of TCLI, includes dependency on libraries."""
 
-import importlib
 import os
 import unittest
 from unittest import mock
 
 from absl import flags
+from absl.testing import flagsaver
+from tcli import accessor_canned
+from tcli import inventory_csv
 from tcli import tcli_lib as tcli
 
-tcli.inventory = importlib.import_module('tcli.inventory_csv')
-tcli.accessor = importlib.import_module('tcli.accessor_canned')
 FLAGS = flags.FLAGS
 
 # Test outputs.
@@ -42,19 +42,17 @@ class UnitTestTCLIEndToEnd(unittest.TestCase):
   @classmethod
   def setUpClass(cls):
     super(UnitTestTCLIEndToEnd, cls).setUpClass()
+    cls.enterClassContext(flagsaver.flagsaver())
+    cls.enterClassContext(mock.patch.object(tcli, 'inventory', inventory_csv))
+    cls.enterClassContext(mock.patch.object(tcli, 'accessor', accessor_canned))
+    cls.enterClassContext(mock.patch.object(tcli.command_response, 'tqdm'))
     tcli.FLAGS([
         __file__,
     ])
-    # Stub out as little as possible.
-    tcli.command_response.tqdm = mock.MagicMock()
-
-  @classmethod
-  def tearDownClass(cls):
-    tcli.inventory = importlib.import_module('tcli.inventory_base')
-    super(UnitTestTCLIEndToEnd, cls).tearDownClass()
 
   def setUp(self):
     super(UnitTestTCLIEndToEnd, self).setUp()
+    self.enterContext(flagsaver.flagsaver())
     tcli.FLAGS.template_dir = os.path.join(
         os.path.dirname(__file__), 'testdata'
     )

@@ -23,6 +23,7 @@ import unittest
 from unittest import mock
 
 from absl import flags
+from absl.testing import flagsaver
 from tcli import accessor_base as accessor
 from tcli import command_register
 from tcli import inventory_base as inventory
@@ -81,21 +82,16 @@ class UnitTestTCLI(unittest.TestCase):
 
   @classmethod
   def setUpClass(cls):
-    cls.flags_orig = copy.deepcopy(tcli.FLAGS)
-    tcli.command_response.threading.Event = mock.MagicMock()
-    tcli.command_response.threading.Lock = mock.MagicMock()
-    tcli.command_response.tqdm = mock.MagicMock()
+    super().setUpClass()
+    cls.enterClassContext(flagsaver.flagsaver())
+    cls.enterClassContext(mock.patch.object(tcli.command_response, 'threading'))
+    cls.enterClassContext(mock.patch.object(tcli.command_response, 'tqdm'))
     tcli.FLAGS.template_dir = os.path.join(
         os.path.dirname(__file__), 'testdata'
     )
-    return super().setUpClass()
-
-  @classmethod
-  def tearDownClass(cls):
-    tcli.FLAGS = cls.flags_orig
-    return super().tearDownClass()
 
   def setUp(self):
+    self.enterContext(flagsaver.flagsaver())
     # Instantiate FLAGS global var.
     tcli.FLAGS([
         __file__,
@@ -106,8 +102,7 @@ class UnitTestTCLI(unittest.TestCase):
     tcli.FLAGS.display = 'raw'
     tcli.FLAGS.filter = None
 
-    self.orig_dev_attr = tcli.inventory.DEVICE_ATTRIBUTES
-    tcli.inventory.DEVICE_ATTRIBUTES = {}
+    self.enterContext(mock.patch.object(tcli.inventory, 'DEVICE_ATTRIBUTES', {}))
 
     with mock.patch.object(tcli.inventory, 'Inventory'):
       self.tcli_obj = tcli.TCLI(interactive=False)
@@ -120,7 +115,7 @@ class UnitTestTCLI(unittest.TestCase):
     }
     self.tcli_obj.inventory.targets = ''
     self.tcli_obj._Print = mock.Mock()
-    accessor.SendRequests = mock.Mock()
+    self.enterContext(mock.patch.object(accessor, 'SendRequests'))
 
     command_register.RegisterCommands(self.tcli_obj, self.tcli_obj.cli_parser)
     self.tcli_obj.cli_parser.RegisterCommand(
@@ -135,10 +130,6 @@ class UnitTestTCLI(unittest.TestCase):
     self.tcli_obj.linewrap = True
     self.tcli_obj.timeout = 1
     return super().setUp()
-
-  def tearDown(self):
-    tcli.inventory.DEVICE_ATTRIBUTES = self.orig_dev_attr
-    return super().tearDown()
 
   def testInlineOnly(self):
     """Tests that only inline supported commands are ruin when inline."""
