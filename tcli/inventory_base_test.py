@@ -54,7 +54,11 @@ class InventoryBaseTest(unittest.TestCase):
       }
       return
 
-    inventory_base.Inventory._FetchDevices = _FetchDevicesStub
+    cls.enterClassContext(
+        mock.patch.object(
+            inventory_base.Inventory, '_FetchDevices', _FetchDevicesStub
+        )
+    )
 
   @classmethod
   def tearDownClass(cls):
@@ -82,6 +86,7 @@ class InventoryBaseTest(unittest.TestCase):
         ),
     }
     self.inv = inventory_base.Inventory()
+    self.addCleanup(self.inv._devices_thread.join)
     self._ClearFilters(self.inv)
 
   def tearDown(self):
