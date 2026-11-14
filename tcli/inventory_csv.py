@@ -195,7 +195,7 @@ class Inventory(inventory_base.Inventory):
         continue
       fields: list[typing.Any] = [l.strip() for l in line.split(separator)]
       device_name, row_values = (fields[0], fields[1:])
-      if header_list[-1] == 'flags':
+      if header_list and header_list[-1] == 'flags':
         # Provided the last header is 'flags' then accept extra columns.
         # Entries that trail on the rhs are gathered into a list under flags.
         device_flags, row_values = (
